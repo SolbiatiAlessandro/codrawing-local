@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>co/place player</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    body { margin: 24px; background: #0b1020; color: #e5e7eb; }
+    main { max-width: 680px; margin: auto; }
+    canvas { width: min(90vw, 600px); aspect-ratio: 1; image-rendering: pixelated; background: white; border: 1px solid #64748b; cursor: crosshair; }
+    .row { display: flex; gap: 10px; margin: 12px 0; align-items: center; }
+    input[type=text] { flex: 1; min-width: 0; padding: 9px; }
+    button { padding: 9px 14px; background: #2563eb; color: white; border: 0; border-radius: 7px; }
+    button:disabled { opacity: .45; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>co/place player</h1>
+  <p>Seat <strong id="slot">—</strong> · Target <strong id="target">—</strong> · Turn <span id="turn">—</span></p>
+  <canvas id="canvas" width="24" height="24"></canvas>
+  <p>Selected pixel: <span id="coordinate">click the canvas</span></p>
+  <div class="row"><label>Color <input id="color" type="color" value="#111827"></label></div>
+  <div class="row"><input id="message" type="text" maxlength="240" placeholder="Public message (optional)"><button id="submit" disabled>Paint</button></div>
+  <p id="status">Connecting…</p>
+</main>
+<script>
+  const canvas = document.querySelector('#canvas'), ctx = canvas.getContext('2d');
+  const submit = document.querySelector('#submit'), status = document.querySelector('#status');
+  let observation = null, selection = null, sentTurn = null;
+  function draw(frame) {
+    canvas.width = frame.width; canvas.height = frame.height;
+    frame.canvas.forEach((color, i) => { ctx.fillStyle = color; ctx.fillRect(i % frame.width, Math.floor(i / frame.width), 1, 1); });
+    document.querySelector('#target').textContent = frame.target;
+    document.querySelector('#turn').textContent = frame.turn;
+    submit.disabled = !selection || sentTurn === frame.turn;
+  }
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(`${protocol}//${location.host}/player${location.search}`);
+  socket.onmessage = event => {
+    const payload = JSON.parse(event.data);
+    if (payload.type === 'welcome') { document.querySelector('#slot').textContent = payload.slot; return; }
+    if (payload.type === 'final') { draw(payload); status.textContent = 'Episode complete'; submit.disabled = true; return; }
+    observation = payload; selection = null; draw(payload); status.textContent = 'Choose one pixel';
+  };
+  socket.onerror = () => status.textContent = 'Connection failed';
+  canvas.addEventListener('click', event => {
+    if (!observation) return;
+    const rect = canvas.getBoundingClientRect();
+    selection = { x: Math.floor((event.clientX - rect.left) * observation.width / rect.width), y: Math.floor((event.clientY - rect.top) * observation.height / rect.height) };
+    document.querySelector('#coordinate').textContent = `${selection.x}, ${selection.y}`;
+    submit.disabled = sentTurn === observation.turn;
+  });
+  submit.addEventListener('click', () => {
+    if (!observation || !selection) return;
+    socket.send(JSON.stringify({ turn: observation.turn, message: document.querySelector('#message').value, paint: { ...selection, color: document.querySelector('#color').value } }));
+    sentTurn = observation.turn; submit.disabled = true; status.textContent = 'Submitted; waiting for the other seats…'; document.querySelector('#message').value = '';
+  });
+</script>
+</body>
+</html>

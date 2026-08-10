@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codrawing"
+version = "0.1.0"
+description = "Local five-agent collaborative pixel-art drawing game"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.115.5",
+  "uvicorn[standard]==0.34.2",
+  "websockets==15.0.1",
+  "claude-agent-sdk>=0.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["codrawing"]
