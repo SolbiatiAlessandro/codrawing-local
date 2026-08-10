@@ -37,13 +37,23 @@ Single-call CLI seats (faster, cheaper, alternates `codex` and `claude`):
 Artifacts (config, results, replay, per-seat logs, agent workspaces) land in
 `runs/<slug>-<timestamp>/`.
 
-## Watch a replay
+## Browse your runs
+
+Each run is a plain directory under `runs/` — `config.json`, `replay.json`,
+`results.json`, per-seat `trace-<slot>.jsonl`, logs, agent workspaces, and a
+self-contained `report.html`. There is no database.
 
 ```bash
-.venv/bin/python scripts/render_replay_page.py runs/<run-dir>/replay.json
+.venv/bin/python scripts/serve_runs.py   # http://127.0.0.1:8600/
 ```
 
-Or point the live viewer at a running game: the server serves `/global` for
+The home page lists every run (canvas thumbnail, best score, pass state) and
+links to each run's report: canvas replay, message board, score / token /
+time charts, and the full collapsible trace of every agent. Reports are
+rendered automatically after agent episodes; the server renders missing ones
+on demand, or run `scripts/render_replay_page.py <run-dir>` by hand.
+
+The game server also serves a live viewer during an episode: `/global` for
 live state and `/replay` for saved replays (see `docs/global-protocol.md`).
 
 ## How the game works
