@@ -224,7 +224,7 @@ class TemplateTest(unittest.TestCase):
         self.assertTrue(engine.post_message(0, "I am agent 0, my strategy is outlines"))
         self.assertFalse(engine.post_message(0, ""))
         self.assertFalse(engine.post_message(9, "bad slot"))
-        self.assertFalse(engine.post_message(0, "x" * 241))
+        self.assertFalse(engine.post_message(0, "x" * 4001))
         for i in range(7):
             self.assertTrue(engine.post_message(0, f"post {i}"))
         self.assertFalse(engine.post_message(0, "over the per-turn cap"))

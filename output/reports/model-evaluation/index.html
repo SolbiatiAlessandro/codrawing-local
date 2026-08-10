@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pixel Drawing Model Evaluation</title>
+  <style>
+    :root {
+      --paper: #f5f2ea;
+      --card: #fffdf8;
+      --ink: #201e1a;
+      --muted: #6f695e;
+      --line: #d9d1c2;
+      --gold: #e99a19;
+      --gold-soft: #fff0cb;
+      --green: #237a57;
+      --red: #a63f3f;
+      --blue: #285f9e;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 4%, rgba(233,154,25,.13), transparent 28rem),
+        linear-gradient(180deg, #faf8f2 0, var(--paper) 28rem);
+      font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--blue); text-underline-offset: 2px; }
+    header, main, footer { width: min(1120px, calc(100% - 32px)); margin-inline: auto; }
+    header { padding: 62px 0 34px; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 12px; font-weight: 800; color: var(--green); }
+    h1 { margin: 8px 0 12px; max-width: 900px; font: 800 clamp(38px, 7vw, 78px)/.98 Georgia, serif; letter-spacing: -.04em; }
+    h2 { margin: 0 0 14px; font: 750 clamp(26px, 4vw, 40px)/1.1 Georgia, serif; letter-spacing: -.02em; }
+    h3 { margin: 0 0 8px; font-size: 18px; }
+    p { margin: 0 0 14px; }
+    .lede { max-width: 780px; color: #4b473f; font-size: 20px; }
+    .meta { margin-top: 20px; color: var(--muted); font-size: 13px; }
+    main { display: grid; gap: 22px; padding-bottom: 52px; }
+    section, .hero-card {
+      background: color-mix(in srgb, var(--card) 96%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 10px 35px rgba(58, 48, 29, .06);
+      padding: clamp(22px, 4vw, 38px);
+    }
+    .hero-card { display: grid; grid-template-columns: 1.5fr 1fr; gap: 24px; align-items: center; }
+    .verdict { font: 750 clamp(26px, 4vw, 44px)/1.12 Georgia, serif; }
+    .verdict strong { color: var(--green); }
+    .scorecard { background: var(--gold-soft); border: 1px solid #efd090; padding: 22px; border-radius: 14px; }
+    .scorecard .big { font: 800 54px/1 Georgia, serif; color: #8a5400; }
+    .scorecard small { color: #725a30; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    figure { margin: 18px 0 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; background: white; image-rendering: auto; }
+    figcaption { margin-top: 9px; color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; background: white; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid #e8e2d7; text-align: left; vertical-align: top; }
+    th { background: #f1ede4; color: #575147; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    tr:last-child td { border-bottom: 0; }
+    .winner td { background: #f0f8f3; }
+    .pass { color: var(--green); font-weight: 800; }
+    .fail { color: var(--red); font-weight: 800; }
+    .bar { min-width: 190px; height: 10px; background: #ece7dd; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+    .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #f1bd43); border-radius: inherit; }
+    .callout { border-left: 5px solid var(--gold); background: #fff8e8; padding: 15px 17px; border-radius: 4px 10px 10px 4px; }
+    .note { color: var(--muted); font-size: 14px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
+    .chip { border: 1px solid var(--line); background: #f7f4ed; border-radius: 999px; padding: 5px 10px; font-size: 12px; }
+    .source { font-size: 11px; font-weight: 800; white-space: nowrap; }
+    ol.refs { padding-left: 22px; }
+    ol.refs li { margin: 9px 0; }
+    code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: #eee9de; padding: 2px 5px; border-radius: 4px; }
+    footer { padding: 0 0 50px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 760px) {
+      .hero-card, .grid { grid-template-columns: 1fr; }
+      header { padding-top: 38px; }
+      section, .hero-card { padding: 21px; }
+    }
+    @media print {
+      body { background: white; }
+      section, .hero-card { break-inside: avoid; box-shadow: none; }
+      a { color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">CoDrawing model audit · local experiment</div>
+    <h1>A small model that actually understands pixel drawings</h1>
+    <p class="lede">Four downloadable classifiers were tested on six light-bulb renderings and two negative controls. MobileCLIP2-S0 was the only candidate that handled outlines, disconnected pixels, filled shapes, and color without retraining.</p>
+    <p class="meta">Prepared 10 August 2026 · Synthetic exploratory benchmark · All percentages below are closed-set scores, not calibrated probabilities.</p>
+  </header>
+
+  <main>
+    <div class="hero-card">
+      <div>
+        <div class="eyebrow">Recommendation</div>
+        <p class="verdict">Use <strong>MobileCLIP2-S0</strong>, precompute the game-label text embeddings, and deploy only its image encoder.</p>
+        <p>Apple publishes the implementation and checkpoints for MobileCLIP2. The model is designed for efficient image–text matching and zero-shot classification <a class="source" href="https://github.com/apple/ml-mobileclip">Apple repository [S1]</a>. The exact S0 checkpoint used here is published on Hugging Face under Apple’s research-model license <a class="source" href="https://huggingface.co/apple/MobileCLIP2-S0">Apple weights [S2]</a>.</p>
+      </div>
+      <div class="scorecard">
+        <div class="big">8 / 8</div>
+        <strong>test images ranked correctly</strong>
+        <p><small>Six bulb variants plus hot-air-balloon and sun controls. This is a local exploratory result, not a population accuracy estimate <a class="source" href="benchmark-results.json">data [D1]</a>.</small></p>
+      </div>
+    </div>
+
+    <section id="images">
+      <h2>The shape test</h2>
+      <p>The set deliberately mixes connected strokes with raster-native constructions. Each image was evaluated against the same ten labels used by the current local scorer. <a class="source" href="benchmark-results.json">Local benchmark [D1]</a></p>
+      <figure>
+        <img src="assets/shape-variants.png" alt="Eight synthetic black and white pixel drawings: six light bulb variants, a hot air balloon, and a sun">
+        <figcaption>Six positive bulb variants followed by two negative controls. The source image is included in this report folder <a class="source" href="assets/shape-variants.png">PNG [A1]</a>.</figcaption>
+      </figure>
+    </section>
+
+    <section id="comparison">
+      <h2>Model comparison</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Model</th><th>Deployment weight</th><th>Bulbs ranked first</th><th>Controls correct</th><th>Assessment</th></tr></thead>
+          <tbody>
+            <tr><td>SqueezeNet 1.1, ImageNet</td><td>4.73 MiB</td><td>0 / 6</td><td>0 / 2</td><td class="fail">Wrong domain</td></tr>
+            <tr><td>MobileNetV3-small, ImageNet</td><td>9.83 MiB</td><td>0 / 6</td><td>0 / 2</td><td class="fail">Wrong domain</td></tr>
+            <tr><td>Local 10-class sketch CNN</td><td>≈0.60 MiB FP32</td><td>3 / 6</td><td>1 / 2</td><td>Needs canvas augmentation</td></tr>
+            <tr class="winner"><td><strong>MobileCLIP2-S0, vision only</strong></td><td><strong>43.5 MiB FP32</strong></td><td><strong>6 / 6</strong></td><td><strong>2 / 2</strong></td><td class="pass">Best tested</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The official MobileNetV3-small checkpoint has 2.54M parameters and a 9.8 MB weight file <a class="source" href="https://docs.pytorch.org/vision/main/models/generated/torchvision.models.mobilenet_v3_small.html">TorchVision [S3]</a>. TorchVision likewise publishes SqueezeNet’s ImageNet weights <a class="source" href="https://docs.pytorch.org/vision/main/models/squeezenet.html">TorchVision [S4]</a>. Local outcomes, parameter counts, and measured sizes are recorded in <a class="source" href="benchmark-results.json">D1</a>.</p>
+    </section>
+
+    <section id="shape-scores">
+      <h2>MobileCLIP2 shape scores</h2>
+      <p>Every bulb was ranked first, including representations made from disconnected pixels or horizontal scanlines. The softmax is restricted to ten candidate labels, so these values measure separation inside this test—not real-world certainty. <a class="source" href="benchmark-results.json">Method and results [D1]</a></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Drawing</th><th>Expected</th><th>Top prediction</th><th>Closed-set score</th></tr></thead>
+          <tbody>
+            <tr><td>Classic connected outline</td><td>light bulb</td><td class="pass">light bulb</td><td>98.62%<div class="bar"><i style="width:98.62%"></i></div></td></tr>
+            <tr><td>Repository ring template</td><td>light bulb</td><td class="pass">light bulb</td><td>64.01%<div class="bar"><i style="width:64.01%"></i></div></td></tr>
+            <tr><td>Angular pixel outline</td><td>light bulb</td><td class="pass">light bulb</td><td>92.51%<div class="bar"><i style="width:92.51%"></i></div></td></tr>
+            <tr><td>Template as scanlines</td><td>light bulb</td><td class="pass">light bulb</td><td>88.60%<div class="bar"><i style="width:88.60%"></i></div></td></tr>
+            <tr><td>Template as separate pixels</td><td>light bulb</td><td class="pass">light bulb</td><td>78.21%<div class="bar"><i style="width:78.21%"></i></div></td></tr>
+            <tr><td>Filled bulb scanlines</td><td>light bulb</td><td class="pass">light bulb</td><td>88.54%<div class="bar"><i style="width:88.54%"></i></div></td></tr>
+            <tr><td>Hot-air-balloon control</td><td>hot air balloon</td><td class="pass">hot air balloon</td><td>40.49%</td></tr>
+            <tr><td>Sun control</td><td>sun</td><td class="pass">sun</td><td>97.66%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="color">
+      <h2>Does it support color?</h2>
+      <div class="grid">
+        <div>
+          <p><strong>Yes: the image encoder consumes RGB and the object prediction remained stable across all tested palettes.</strong> With identical geometry, “light bulb” ranked first for black, gold, orange, blue, green, multicolor, inverted, and dark-background versions. <a class="source" href="color-results.json">Color benchmark [D2]</a></p>
+          <div class="callout"><strong>Important distinction:</strong> color contributes to the embedding, but the game should score the object label—not require the model to name the exact hue.</div>
+        </div>
+        <div>
+          <h3>Color-word probe</h3>
+          <p>The auxiliary probe correctly named orange, blue, green, white-on-black, and yellow-on-dark. It called gold “orange” and called black-on-white “white,” apparently attending to the dominant background. <strong>Inference from D2:</strong> color is usable contextual evidence but is not reliable enough to grade precise palette choices.</p>
+        </div>
+      </div>
+      <figure>
+        <img src="assets/color-variants.png" alt="Eight copies of the same light bulb drawing rendered with different foreground and background colors">
+        <figcaption>Controlled color variants: geometry is held constant while foreground and background colors change <a class="source" href="assets/color-variants.png">PNG [A2]</a>.</figcaption>
+      </figure>
+      <div class="table-wrap" style="margin-top:18px">
+        <table>
+          <thead><tr><th>Palette</th><th>Light-bulb rank</th><th>Closed-set object score</th><th>Color probe</th></tr></thead>
+          <tbody>
+            <tr><td>Black / white</td><td>1</td><td>98.85%</td><td>white, then black</td></tr>
+            <tr><td>Gold / white</td><td>1</td><td>98.80%</td><td>orange, then yellow</td></tr>
+            <tr><td>Orange / white</td><td>1</td><td>98.65%</td><td class="pass">orange</td></tr>
+            <tr><td>Blue / white</td><td>1</td><td>98.46%</td><td class="pass">blue</td></tr>
+            <tr><td>Green / white</td><td>1</td><td>98.45%</td><td class="pass">green</td></tr>
+            <tr><td>Gold + slate / white</td><td>1</td><td>99.04%</td><td>orange, then yellow</td></tr>
+            <tr><td>White / black</td><td>1</td><td>98.82%</td><td class="pass">white</td></tr>
+            <tr><td>Gold / dark</td><td>1</td><td>98.92%</td><td class="pass">yellow</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="deployment">
+      <h2>Practical deployment</h2>
+      <div class="grid">
+        <div>
+          <h3>What ships</h3>
+          <p>The measured full model has 74.8M parameters and occupies 285.8 MiB in the local cache. Its image encoder accounts for 11.4M parameters, or about 43.5 MiB in FP32. Precomputing one 512-dimensional text embedding per game label removes the need to ship the text encoder. <a class="source" href="benchmark-results.json">Measured breakdown [D1]</a></p>
+          <div class="chips"><span class="chip">11.4M vision parameters</span><span class="chip">43.5 MiB FP32</span><span class="chip">512-D label vectors</span></div>
+        </div>
+        <div>
+          <h3>What still needs validation</h3>
+          <p>The local median was 116.8 ms for one image-encoder pass on CPU after warm-up. <strong>Inference from D1:</strong> once-per-turn scoring is feasible, but ONNX export, INT8 quantization, and threshold calibration must be measured rather than assumed.</p>
+          <p class="note">A larger evaluation should include incomplete turn-by-turn canvases, erasures, collisions, every target class, and deliberately adversarial patterns.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="method">
+      <h2>Method and limitations</h2>
+      <p>The current repository scorer discards color and compares a binary mask to one mean bitmap per class <a class="source" href="../../../codrawing/game/image_model.py">current implementation [L1]</a>. The replacement candidates were evaluated without changing repository code.</p>
+      <p>The tiny CNN was trained on 1,500 Google Quick Draw bitmap samples per class and checked on the next 100. Google documents the 28×28 bitmap format and makes the underlying dataset available under CC BY 4.0 <a class="source" href="https://github.com/googlecreativelab/quickdraw-dataset">Google dataset [S5]</a>. Its 91.2% held-out result did not transfer cleanly to the synthetic canvas styles, demonstrating domain shift rather than production readiness <a class="source" href="benchmark-results.json">D1</a>.</p>
+      <p><strong>Uncertainty:</strong> eight synthetic images are enough to reject obviously unsuitable models, but not enough to establish a production pass threshold or false-positive rate. The next benchmark should use hundreds of saved game canvases and human labels.</p>
+    </section>
+
+    <section id="references">
+      <h2>References and evidence</h2>
+      <ol class="refs">
+        <li><a href="https://github.com/apple/ml-mobileclip">Apple ML Research — MobileCLIP and MobileCLIP2 official implementation [S1]</a>.</li>
+        <li><a href="https://huggingface.co/apple/MobileCLIP2-S0">Apple — MobileCLIP2-S0 official checkpoint and license [S2]</a>.</li>
+        <li><a href="https://docs.pytorch.org/vision/main/models/generated/torchvision.models.mobilenet_v3_small.html">PyTorch — MobileNetV3-small official weights and metadata [S3]</a>.</li>
+        <li><a href="https://docs.pytorch.org/vision/main/models/squeezenet.html">PyTorch — SqueezeNet models and official weights [S4]</a>.</li>
+        <li><a href="https://github.com/googlecreativelab/quickdraw-dataset">Google Creative Lab — Quick Draw dataset documentation and license [S5]</a>.</li>
+        <li><a href="benchmark-results.json">Local shape/model benchmark data [D1]</a>.</li>
+        <li><a href="color-results.json">Local RGB robustness and color-word probe data [D2]</a>.</li>
+        <li><a href="assets/shape-variants.png">Shape test image asset [A1]</a>; <a href="assets/color-variants.png">color test image asset [A2]</a>.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    Generated as an inspectable local report. Data files and image assets are linked directly so every local experimental claim can be audited.
+  </footer>
+</body>
+</html>

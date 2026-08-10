@@ -98,7 +98,11 @@ h1 { font-size: 22px; font-weight: 700; margin: 4px 0 0; letter-spacing: 0.02em;
   width: max-content;
   margin: 0 auto;
 }
-#board .c { width: 20px; height: 20px; background: var(--card); }
+#board .c {
+  width: 20px; height: 20px; background: var(--card);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; line-height: 1; user-select: none;
+}
 #board .c.changed { box-shadow: inset 0 0 0 2.5px var(--ink); }
 .cardfoot {
   display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
@@ -210,6 +214,11 @@ details.res pre { font-size: 11.5px; background: var(--paper); border: 1px solid
 
   <div class="legend" id="legend"></div>
 
+  <section class="card" id="interviews" style="display:none">
+    <h2>Post-episode interviews</h2>
+    <div id="interviews-body"></div>
+  </section>
+
   <section class="traces" id="traces"></section>
 </div>
 <div id="tip" class="tip" hidden></div>
@@ -230,6 +239,10 @@ const hasTraces = Object.keys(traces).length > 0;
 
 function esc(v) { const d = document.createElement("div"); d.textContent = v; return d.innerHTML; }
 function fmtTokens(n) { return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n); }
+function inkFor(hex) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 140 ? "#26221A" : "#FFFFFF";
+}
 
 document.getElementById("eyebrow").textContent = "codrawing replay \\u00b7 " + (results.image_model || "");
 document.getElementById("title").textContent =
@@ -280,6 +293,8 @@ const stats = [
   ["final score", finalFb.target_score !== undefined ? (finalFb.target_score * 100).toFixed(1) + "%" : "\\u2014", ""],
   ["threshold", finalFb.pass_threshold !== undefined ? (finalFb.pass_threshold * 100).toFixed(0) + "%" : "\\u2014", ""],
   ["evaluation", results.evaluation_passed ? "PASS" : "NOT PASSING", results.evaluation_passed ? "pass" : "fail"],
+  ["turns", results.turns + "/" + (results.max_turns || frames[0].max_turns) +
+    (results.ended_by_agents ? " \\u00b7 ended by agents" : ""), ""],
   ["accepted pixels", results.accepted_pixels.join(" / "), ""],
 ];
 if (hasTraces) {
@@ -315,7 +330,14 @@ function show(f) {
   const changed = [];
   for (let i = 0; i < W * H; i++) {
     const color = frame.canvas[i];
+    const owner = frame.owners ? frame.owners[i] : -1;
     cells[i].style.background = color === WHITE ? "" : color;
+    if (color !== WHITE && owner >= 0) {
+      cells[i].textContent = String(owner + 1);
+      cells[i].style.color = inkFor(color);
+    } else {
+      cells[i].textContent = "";
+    }
     const was = prev ? prev.canvas[i] : WHITE;
     const isChanged = was !== color;
     cells[i].classList.toggle("changed", isChanged);
@@ -467,6 +489,18 @@ function eventHtml(ev) {
   return "";
 }
 if (hasTraces) {
+  const interviewCards = Object.keys(traces).sort().map(slot => {
+    const interview = traces[slot].find(r => r.phase === "interview");
+    if (!interview) return "";
+    const text = (interview.events || []).filter(e => e.type === "text").map(eventHtml).join("");
+    return '<div class="tturn interview"><div class="tthead"><span class="chip" ' +
+      'style="display:inline-block;background:' + SEATS[slot] + '"></span> ' +
+      esc(names[slot] || ("Agent " + slot)) + "</div>" + (text || '<p class="ev">(no answer)</p>') + "</div>";
+  }).join("");
+  if (interviewCards) {
+    document.getElementById("interviews").style.display = "";
+    document.getElementById("interviews-body").innerHTML = interviewCards;
+  }
   document.getElementById("traces").innerHTML = Object.keys(traces).sort().map(slot => {
     const recs = turnRecords(traces[slot]);
     const interview = traces[slot].find(r => r.phase === "interview");

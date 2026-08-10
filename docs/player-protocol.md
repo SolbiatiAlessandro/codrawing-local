@@ -52,6 +52,6 @@ The player replies once for that turn with one public message and one pixel:
 }
 ```
 
-Messages may be empty and have a maximum length of 240 characters. Colors use six-digit hex form. The bundled score-aware LLM policy uses its assigned seat color for new paint and `#FFFFFF` to erase a harmful prior experiment. Invalid or late actions are ignored. Actions resolve at the same time; when two or more players choose the same pixel, every write to that pixel is dropped. The next observation reports the accepted and collided slots so a persistent player process can interpret the score change. A slow or disconnected player does not block the episode beyond `action_timeout_seconds`.
+Messages may be empty and have a maximum length of 4000 characters. Colors use six-digit hex form. The bundled score-aware LLM policy uses its assigned seat color for new paint and `#FFFFFF` to erase a harmful prior experiment. Invalid or late actions are ignored. Actions resolve at the same time; when two or more players choose the same pixel, every write to that pixel is dropped. The next observation reports the accepted and collided slots so a persistent player process can interpret the score change. A slow or disconnected player does not block the episode beyond `action_timeout_seconds`.
 
 The final server frame has `type: "final"`; the player must then exit.

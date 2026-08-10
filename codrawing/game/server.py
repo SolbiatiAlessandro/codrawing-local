@@ -248,6 +248,12 @@ async def player(websocket: WebSocket) -> None:
             engine = runtime.engine
             if engine is None or runtime.finished:
                 continue
+            if raw.get("type") == "complete":
+                # Standing vote to end the episode early; a completed seat
+                # leaves the paint barrier immediately.
+                if engine.mark_complete(slot) and _barrier_met():
+                    runtime.action_event.set()
+                continue
             if raw.get("turn") != engine.turn:
                 continue
             if raw.get("type") == "message":
@@ -259,13 +265,21 @@ async def player(websocket: WebSocket) -> None:
             if slot in runtime.pending_actions:
                 continue
             runtime.pending_actions[slot] = raw
-            # Barrier: the turn resolves once every currently connected player
-            # has painted, so per-agent latency never costs anyone a write.
-            if len(runtime.pending_actions) >= max(1, len(runtime.players)):
+            # Barrier: the turn resolves once every active (connected and not
+            # completed) player has painted, so latency never costs a write.
+            if _barrier_met():
                 runtime.action_event.set()
     finally:
         if runtime.players.get(slot) is websocket:
             del runtime.players[slot]
+
+
+def _barrier_met() -> bool:
+    engine = runtime.engine
+    if engine is None:
+        return False
+    active = [slot for slot in runtime.players if slot not in engine.completed]
+    return all(slot in runtime.pending_actions for slot in active)
 
 
 async def _start_after_connect_timeout() -> None:

@@ -28,6 +28,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import re
 import time
 from typing import Any, cast
 
@@ -47,17 +48,21 @@ GAME_PROMPT = """You are agent {slot}, one of {seat_count} agents in codrawing, 
 All agents share one {width}x{height} canvas (x right, y down) and must draw the target together.
 Target: {target}. Episode length: {max_turns} turns. {round_line}All agents act in the same turn.
 
-You have access to three game APIs, exposed as tools:
+You have access to four game APIs, exposed as tools:
 - paint_pixel(x, y, color): submit your single pixel for this turn. Each agent paints exactly one
   pixel per turn. If two agents paint the same pixel in the same turn, both writes are dropped.
-  Your paint color is {color}; #FFFFFF erases.
-- message_board_send(text): post a message (max 240 chars) to the shared public message board.
-  All agents see it immediately, even mid-turn.
+  Pick ANY color as #RRGGBB — choose whatever helps the drawing; #FFFFFF erases. (Color is purely
+  artistic: the viewers label each pixel with the painter's number.)
+- message_board_send(text): post a message to the shared public message board. All agents see it
+  immediately, even mid-turn.
 - message_board_read(): read the latest board messages, including posts made by other agents
   during the current turn.
+- complete(): declare the drawing finished. Irreversible: you stop acting, and once EVERY agent
+  has called complete the episode ends early. The {max_turns}-turn cap is a limit, not a goal —
+  extra pixels can lower the score, so complete when the drawing is done.
 
-When ALL agents have called paint_pixel, the turn resolves and the game moves on. You have a
-strict time budget per turn; an agent that misses the paint window loses its pixel for the turn.
+When ALL active agents have called paint_pixel, the turn resolves and the game moves on. You have
+a strict time budget per turn; an agent that misses the paint window loses its pixel for the turn.
 A black-box classifier scores the canvas after every turn; the team's recorded score is the BEST
 score ever reached. You also have a private workspace (files, bash, python) that persists across
 turns."""
@@ -72,14 +77,18 @@ DEFAULT_POLICY = """How to play each turn:
 5. When coordination is clear, call paint_pixel EXACTLY ONCE, then end your reply. Do not stall:
    read the board once, post at most TWO short messages, then paint. Post exact coordinates
    ("agent N takes (x,y)"), not vague zones. Long file work is only worth it once, early, to
-   compute the full point plan. Infer the classifier's behavior from score deltas."""
+   compute the full point plan. Infer the classifier's behavior from score deltas.
+6. When the drawing is as good as it will get and more pixels would hurt, say so on the board and
+   call complete instead of painting."""
 
 DEFAULT_SOLO_POLICY = """How to play each turn:
 1. Plan in your private workspace: keep a PLAN file with the full point plan, use python to
    compute exact coordinates. Long file work is only worth it once, early.
 2. Call paint_pixel EXACTLY ONCE with the most score-improving pixel, then end your reply.
 3. Track the classifier's score delta after every pixel and adapt the plan; infer its behavior
-   from the deltas."""
+   from the deltas.
+4. When the drawing is as good as it will get and more pixels would hurt, call complete instead
+   of painting."""
 
 
 def claude_environment() -> None:
@@ -143,6 +152,7 @@ class Seat:
         self.slot: int | None = None
         self.turn: int = 0
         self.painted: bool = False
+        self.completed: bool = False
         self.game_over: bool = False
         self.board: list[dict[str, Any]] = []
         self.observations: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
@@ -179,13 +189,13 @@ seat = Seat()
 
 @tool(
     "message_board_send",
-    "Post a message (max 240 chars) to the shared public message board. All agents see it immediately.",
+    "Post a message to the shared public message board. All agents see it immediately.",
     {"text": str},
 )
 async def message_board_send(args: dict[str, Any]) -> dict[str, Any]:
     if seat.game_over:
         return {"content": [{"type": "text", "text": "the episode is over"}]}
-    text = str(args.get("text", ""))[:240]
+    text = str(args.get("text", ""))[:4000]
     await seat.websocket.send(json.dumps({"type": "message", "turn": seat.turn, "text": text}))
     return {"content": [{"type": "text", "text": "posted"}]}
 
@@ -204,7 +214,7 @@ async def message_board_read(args: dict[str, Any]) -> dict[str, Any]:
 @tool(
     "paint_pixel",
     "Submit your single pixel for this turn. This ends your turn; the game turn resolves when all "
-    "agents have painted. Use your seat color, or #FFFFFF to erase.",
+    "agents have painted. Pick any #RRGGBB color; #FFFFFF erases.",
     {"x": int, "y": int, "color": str},
 )
 async def paint_pixel(args: dict[str, Any]) -> dict[str, Any]:
@@ -216,9 +226,9 @@ async def paint_pixel(args: dict[str, Any]) -> dict[str, Any]:
         x, y = int(args["x"]), int(args["y"])
     except (KeyError, TypeError, ValueError):
         return {"content": [{"type": "text", "text": "x and y must be integers"}], "is_error": True}
-    color = str(args.get("color", seat.color)).upper()
-    if color != "#FFFFFF":
-        color = seat.color
+    color = str(args.get("color", "")).upper()
+    if not re.fullmatch(r"#[0-9A-F]{6}", color):
+        return {"content": [{"type": "text", "text": f"color must use {COLOR_HINT}"}], "is_error": True}
     await seat.websocket.send(
         json.dumps({"turn": seat.turn, "message": "", "paint": {"x": x, "y": y, "color": color}})
     )
@@ -226,6 +236,30 @@ async def paint_pixel(args: dict[str, Any]) -> dict[str, Any]:
     return {
         "content": [
             {"type": "text", "text": f"submitted ({x},{y}) {color}; the turn resolves when all agents have painted"}
+        ]
+    }
+
+
+@tool(
+    "complete",
+    "Declare the drawing finished. Irreversible: you stop acting, and once every agent has called "
+    "complete the episode ends early (before the turn cap).",
+    {},
+)
+async def complete(args: dict[str, Any]) -> dict[str, Any]:
+    if seat.game_over:
+        return {"content": [{"type": "text", "text": "the episode is over"}]}
+    if seat.completed:
+        return {"content": [{"type": "text", "text": "you already called complete"}]}
+    await seat.websocket.send(json.dumps({"type": "complete", "turn": seat.turn}))
+    seat.completed = True
+    seat.painted = True
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": "complete recorded; the episode ends once every agent has called complete",
+            }
         ]
     }
 
@@ -249,9 +283,10 @@ def observation_text(observation: dict[str, Any]) -> str:
     return f"""Turn {observation['turn']} of {observation['max_turns']} (round {observation.get('round', 1)}/{observation.get('rounds', 1)}).
 Classifier: {score_line}
 Last turn accepted agents: {observation.get('previous_accepted_slots', [])}; collided: {observation.get('previous_collision_slots', [])}.
+Agents that already called complete: {observation.get('completed_slots', [])}.
 Painted pixels: {'; '.join(painted) if painted else '(blank canvas)'}
 
-Your turn: read the message board, coordinate, then call paint_pixel once."""
+Your turn: read the message board, coordinate, then call paint_pixel once (or complete if the drawing is done)."""
 
 
 async def main() -> None:
@@ -272,7 +307,7 @@ async def main() -> None:
             if first is None or seat.slot is None:
                 return
             game_server = create_sdk_mcp_server(
-                name="game", tools=[message_board_send, message_board_read, paint_pixel]
+                name="game", tools=[message_board_send, message_board_read, paint_pixel, complete]
             )
             options = ClaudeAgentOptions(
                 system_prompt=build_system_prompt(first, seat.slot),
@@ -287,6 +322,7 @@ async def main() -> None:
                     "mcp__game__message_board_send",
                     "mcp__game__message_board_read",
                     "mcp__game__paint_pixel",
+                    "mcp__game__complete",
                 ],
                 permission_mode="bypassPermissions",
                 cwd=str(workspace),
@@ -309,6 +345,10 @@ async def main() -> None:
                 observation: dict[str, Any] | None = first
                 while observation is not None:
                     seat.turn = int(observation["turn"])
+                    if seat.completed:
+                        # Done playing; wait quietly for the others to finish.
+                        observation = await seat.observations.get()
+                        continue
                     seat.painted = False
                     prompt = observation_text(observation)
                     turn_started = time.monotonic()
@@ -334,7 +374,7 @@ async def main() -> None:
                             break
                         if reply:
                             print(f"turn {seat.turn}: no paint in reply: {reply[:200]}", flush=True)
-                        prompt = "You have not painted yet. Call paint_pixel immediately."
+                        prompt = "You have not painted yet. Call paint_pixel now (or complete if you are finished)."
                     cost_delta(usage)
                     trace.write(
                         {

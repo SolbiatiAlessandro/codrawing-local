@@ -8,7 +8,7 @@ from typing import Any
 
 
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
-MAX_MESSAGE_LENGTH = 240
+MAX_MESSAGE_LENGTH = 4000
 
 
 @dataclass(frozen=True)
@@ -62,10 +62,18 @@ class PixelArtEngine:
         self.owners = [-1] * (width * height)
         self.accepted_pixels = [0] * len(player_names)
         self.messages: list[dict[str, Any]] = []
+        self.completed: set[int] = set()
 
     @property
     def done(self) -> bool:
-        return self.turn >= self.max_turns
+        return self.turn >= self.max_turns or len(self.completed) >= len(self.player_names)
+
+    def mark_complete(self, slot: int) -> bool:
+        """Record a seat's standing vote to end the episode early."""
+        if not (0 <= slot < len(self.player_names)) or self.turn >= self.max_turns:
+            return False
+        self.completed.add(slot)
+        return True
 
     @property
     def rounds(self) -> int:
@@ -124,7 +132,8 @@ class PixelArtEngine:
         return Action(message=message.strip(), paint=Paint(x, y, color.upper()))
 
     def resolve(self, raw_actions: dict[int, Any]) -> dict[str, Any]:
-        if self.done:
+        # Completion votes may land mid-turn; still resolve that turn's paints.
+        if self.turn >= self.max_turns:
             raise RuntimeError("episode is already complete")
 
         valid: dict[int, Action] = {}
@@ -187,6 +196,7 @@ class PixelArtEngine:
             "accepted_pixels": self.accepted_pixels.copy(),
             "player_names": self.player_names.copy(),
             "messages": (turn_messages or []).copy(),
+            "completed_slots": sorted(self.completed),
             "done": self.done,
         }
 
@@ -197,6 +207,9 @@ class PixelArtEngine:
             "scores": [0.0] * len(self.player_names),
             "target": self.target,
             "turns": self.turn,
+            "max_turns": self.max_turns,
+            "completed_slots": sorted(self.completed),
+            "ended_by_agents": len(self.completed) >= len(self.player_names),
             "accepted_pixels": self.accepted_pixels.copy(),
             "final_canvas": self.canvas.copy(),
         }

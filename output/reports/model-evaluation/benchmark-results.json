@@ -1,0 +1,123 @@
+{
+  "date": "2026-08-10",
+  "scope": "Local exploratory benchmark on six synthetic light-bulb pixel drawings and two negative controls",
+  "candidate_labels": [
+    "light bulb",
+    "hot air balloon",
+    "candle",
+    "flashlight",
+    "lollipop",
+    "pear",
+    "sun",
+    "wine glass",
+    "clock",
+    "snowman"
+  ],
+  "models": [
+    {
+      "model": "SqueezeNet 1.1 ImageNet-1K",
+      "official_weight_file_mib": 4.73,
+      "bulb_variants_ranked_first": 0,
+      "bulb_variant_count": 6,
+      "controls_ranked_correctly": 0,
+      "control_count": 2
+    },
+    {
+      "model": "MobileNetV3-small ImageNet-1K",
+      "official_weight_file_mib": 9.83,
+      "bulb_variants_ranked_first": 0,
+      "bulb_variant_count": 6,
+      "controls_ranked_correctly": 0,
+      "control_count": 2
+    },
+    {
+      "model": "Locally trained 10-class sketch CNN",
+      "parameters": 156394,
+      "estimated_fp32_weight_mib": 0.6,
+      "held_out_quickdraw_accuracy": 0.912,
+      "held_out_light_bulb_accuracy": 0.8,
+      "bulb_variants_ranked_first": 3,
+      "bulb_variant_count": 6,
+      "controls_ranked_correctly": 1,
+      "control_count": 2
+    },
+    {
+      "model": "MobileCLIP2-S0 dfndr2b",
+      "total_parameters": 74835073,
+      "vision_parameters": 11406976,
+      "full_cached_checkpoint_mib": 285.8,
+      "vision_fp32_weight_mib": 43.5,
+      "median_single_image_cpu_latency_ms": 116.8,
+      "bulb_variants_ranked_first": 6,
+      "bulb_variant_count": 6,
+      "controls_ranked_correctly": 2,
+      "control_count": 2
+    }
+  ],
+  "mobileclip2_shape_results": [
+    {
+      "variant": "Classic connected outline",
+      "expected": "light bulb",
+      "top_prediction": "light bulb",
+      "expected_rank": 1,
+      "closed_set_score": 0.98615
+    },
+    {
+      "variant": "Repository ring template",
+      "expected": "light bulb",
+      "top_prediction": "light bulb",
+      "expected_rank": 1,
+      "closed_set_score": 0.64014
+    },
+    {
+      "variant": "Angular pixel outline",
+      "expected": "light bulb",
+      "top_prediction": "light bulb",
+      "expected_rank": 1,
+      "closed_set_score": 0.92505
+    },
+    {
+      "variant": "Repository template as scanlines",
+      "expected": "light bulb",
+      "top_prediction": "light bulb",
+      "expected_rank": 1,
+      "closed_set_score": 0.88604
+    },
+    {
+      "variant": "Repository template as separate pixels",
+      "expected": "light bulb",
+      "top_prediction": "light bulb",
+      "expected_rank": 1,
+      "closed_set_score": 0.78213
+    },
+    {
+      "variant": "Filled bulb scanlines",
+      "expected": "light bulb",
+      "top_prediction": "light bulb",
+      "expected_rank": 1,
+      "closed_set_score": 0.88544
+    },
+    {
+      "variant": "Hot-air-balloon control",
+      "expected": "hot air balloon",
+      "top_prediction": "hot air balloon",
+      "expected_rank": 1,
+      "closed_set_score": 0.4049,
+      "light_bulb_score": 0.27832
+    },
+    {
+      "variant": "Sun control",
+      "expected": "sun",
+      "top_prediction": "sun",
+      "expected_rank": 1,
+      "closed_set_score": 0.9766,
+      "light_bulb_score": 0.01563
+    }
+  ],
+  "method_notes": [
+    "MobileCLIP2 text embeddings were averaged across three prompt templates.",
+    "Closed-set scores are softmax values over only ten candidate labels and are not calibrated probabilities.",
+    "The synthetic set is intentionally small and is suitable for model selection, not final threshold calibration.",
+    "CPU latency was measured locally after warm-up on one 256-pixel model input; production latency will vary by hardware and runtime."
+  ]
+}

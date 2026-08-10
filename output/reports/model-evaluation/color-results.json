@@ -1,0 +1,375 @@
+{
+  "date": "2026-08-10",
+  "model": "MobileCLIP2-S0 dfndr2b",
+  "checkpoint_source": "timm/MobileCLIP2-S0-OpenCLIP",
+  "candidate_labels": [
+    "light bulb",
+    "hot air balloon",
+    "candle",
+    "flashlight",
+    "lollipop",
+    "pear",
+    "sun",
+    "wine glass",
+    "clock",
+    "snowman"
+  ],
+  "prompt_templates": [
+    "a simple black and white pixel art icon of a {}",
+    "a simple line drawing of a {}",
+    "a hand-drawn sketch of a {}"
+  ],
+  "note": "Closed-set scores are softmax values over only the listed candidate labels and are not calibrated probabilities.",
+  "results": [
+    {
+      "key": "black_on_white",
+      "variant": "Black / white",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9884777665138245,
+      "light_bulb_cosine_similarity": 0.34064045548439026,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9884777665138245
+        },
+        {
+          "label": "flashlight",
+          "score": 0.006197693292051554
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.004217376001179218
+        }
+      ]
+    },
+    {
+      "key": "gold_on_white",
+      "variant": "Gold / white",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9879928827285767,
+      "light_bulb_cosine_similarity": 0.3227962255477905,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9879928827285767
+        },
+        {
+          "label": "flashlight",
+          "score": 0.005798010155558586
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.003842325648292899
+        }
+      ]
+    },
+    {
+      "key": "orange_on_white",
+      "variant": "Orange / white",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9865102171897888,
+      "light_bulb_cosine_similarity": 0.32509076595306396,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9865102171897888
+        },
+        {
+          "label": "flashlight",
+          "score": 0.006104771513491869
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.0053679789416491985
+        }
+      ]
+    },
+    {
+      "key": "blue_on_white",
+      "variant": "Blue / white",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9845558404922485,
+      "light_bulb_cosine_similarity": 0.32613605260849,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9845558404922485
+        },
+        {
+          "label": "flashlight",
+          "score": 0.00886957161128521
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.005128714721649885
+        }
+      ]
+    },
+    {
+      "key": "green_on_white",
+      "variant": "Green / white",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9844987988471985,
+      "light_bulb_cosine_similarity": 0.3204020857810974,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9844987988471985
+        },
+        {
+          "label": "flashlight",
+          "score": 0.008535318076610565
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.005077348556369543
+        }
+      ]
+    },
+    {
+      "key": "multicolor_on_white",
+      "variant": "Gold + slate / white",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9904211759567261,
+      "light_bulb_cosine_similarity": 0.32016831636428833,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9904211759567261
+        },
+        {
+          "label": "flashlight",
+          "score": 0.005280377343297005
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.002233493374660611
+        }
+      ]
+    },
+    {
+      "key": "white_on_black",
+      "variant": "White / black",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9881595373153687,
+      "light_bulb_cosine_similarity": 0.33571332693099976,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9881595373153687
+        },
+        {
+          "label": "flashlight",
+          "score": 0.0074043539352715015
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.003375343745574355
+        }
+      ]
+    },
+    {
+      "key": "gold_on_dark",
+      "variant": "Gold / dark",
+      "light_bulb_rank": 1,
+      "light_bulb_closed_set_score": 0.9891993999481201,
+      "light_bulb_cosine_similarity": 0.31718507409095764,
+      "top3": [
+        {
+          "label": "light bulb",
+          "score": 0.9891993999481201
+        },
+        {
+          "label": "flashlight",
+          "score": 0.006030148360878229
+        },
+        {
+          "label": "hot air balloon",
+          "score": 0.002546047791838646
+        }
+      ]
+    }
+  ],
+  "color_discrimination_probe": {
+    "candidate_prompts": [
+      "a simple pixel art icon of a black light bulb",
+      "a simple pixel art icon of a yellow light bulb",
+      "a simple pixel art icon of a orange light bulb",
+      "a simple pixel art icon of a blue light bulb",
+      "a simple pixel art icon of a green light bulb",
+      "a simple pixel art icon of a red light bulb",
+      "a simple pixel art icon of a white light bulb"
+    ],
+    "note": "This auxiliary closed-set probe tests whether the RGB encoder notices ink color. Yellow is used as the natural-language label for the gold variants.",
+    "results": [
+      {
+        "key": "black_on_white",
+        "variant": "Black / white",
+        "expected_color_label": "black",
+        "predicted_color_label": "white",
+        "expected_color_rank": 2,
+        "top3": [
+          {
+            "label": "white",
+            "score": 0.4011267423629761
+          },
+          {
+            "label": "black",
+            "score": 0.2608345150947571
+          },
+          {
+            "label": "blue",
+            "score": 0.19089795649051666
+          }
+        ]
+      },
+      {
+        "key": "gold_on_white",
+        "variant": "Gold / white",
+        "expected_color_label": "yellow",
+        "predicted_color_label": "orange",
+        "expected_color_rank": 2,
+        "top3": [
+          {
+            "label": "orange",
+            "score": 0.43627098202705383
+          },
+          {
+            "label": "yellow",
+            "score": 0.29551514983177185
+          },
+          {
+            "label": "white",
+            "score": 0.15824121236801147
+          }
+        ]
+      },
+      {
+        "key": "orange_on_white",
+        "variant": "Orange / white",
+        "expected_color_label": "orange",
+        "predicted_color_label": "orange",
+        "expected_color_rank": 1,
+        "top3": [
+          {
+            "label": "orange",
+            "score": 0.586021900177002
+          },
+          {
+            "label": "white",
+            "score": 0.142364501953125
+          },
+          {
+            "label": "red",
+            "score": 0.11422084271907806
+          }
+        ]
+      },
+      {
+        "key": "blue_on_white",
+        "variant": "Blue / white",
+        "expected_color_label": "blue",
+        "predicted_color_label": "blue",
+        "expected_color_rank": 1,
+        "top3": [
+          {
+            "label": "blue",
+            "score": 0.5987986922264099
+          },
+          {
+            "label": "white",
+            "score": 0.1780824512243271
+          },
+          {
+            "label": "black",
+            "score": 0.12194512039422989
+          }
+        ]
+      },
+      {
+        "key": "green_on_white",
+        "variant": "Green / white",
+        "expected_color_label": "green",
+        "predicted_color_label": "green",
+        "expected_color_rank": 1,
+        "top3": [
+          {
+            "label": "green",
+            "score": 0.7218276858329773
+          },
+          {
+            "label": "white",
+            "score": 0.12157145142555237
+          },
+          {
+            "label": "black",
+            "score": 0.06337068974971771
+          }
+        ]
+      },
+      {
+        "key": "multicolor_on_white",
+        "variant": "Gold + slate / white",
+        "expected_color_label": "yellow",
+        "predicted_color_label": "orange",
+        "expected_color_rank": 2,
+        "top3": [
+          {
+            "label": "orange",
+            "score": 0.3978821337223053
+          },
+          {
+            "label": "yellow",
+            "score": 0.27747842669487
+          },
+          {
+            "label": "white",
+            "score": 0.16855651140213013
+          }
+        ]
+      },
+      {
+        "key": "white_on_black",
+        "variant": "White / black",
+        "expected_color_label": "white",
+        "predicted_color_label": "white",
+        "expected_color_rank": 1,
+        "top3": [
+          {
+            "label": "white",
+            "score": 0.43416067957878113
+          },
+          {
+            "label": "black",
+            "score": 0.26757970452308655
+          },
+          {
+            "label": "blue",
+            "score": 0.17163029313087463
+          }
+        ]
+      },
+      {
+        "key": "gold_on_dark",
+        "variant": "Gold / dark",
+        "expected_color_label": "yellow",
+        "predicted_color_label": "yellow",
+        "expected_color_rank": 1,
+        "top3": [
+          {
+            "label": "yellow",
+            "score": 0.46252721548080444
+          },
+          {
+            "label": "black",
+            "score": 0.18014049530029297
+          },
+          {
+            "label": "orange",
+            "score": 0.11861564964056015
+          }
+        ]
+      }
+    ]
+  }
+}
