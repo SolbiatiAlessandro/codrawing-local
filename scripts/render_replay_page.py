@@ -475,6 +475,9 @@ if (hasTraces) {
 } else {
   document.getElementById("tokens-card").style.display = "none";
   document.getElementById("time-card").style.display = "none";
+  document.getElementById("traces").innerHTML =
+    '<p style="color:var(--muted);font-size:12.5px;margin:0">No agent traces for this run \\u2014 ' +
+    "only agent seats (run_agent_episode.py) record per-turn traces, tokens, and timing.</p>";
 }
 
 let cursor = frames.length - 1;
