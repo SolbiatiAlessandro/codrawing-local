@@ -52,6 +52,7 @@ body {
 .wrap { max-width: 1160px; margin: 0 auto; }
 .eyebrow { text-transform: uppercase; letter-spacing: 0.14em; font-size: 12px; color: var(--muted); }
 h1 { font-size: 22px; font-weight: 700; margin: 4px 0 20px; }
+h2 { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 8px; margin: 26px 0 14px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 a.card {
   display: grid; grid-template-columns: 104px 1fr; gap: 14px;
@@ -74,7 +75,7 @@ a.card:hover { border-color: var(--muted); }
 <div class="wrap">
   <div class="eyebrow">codrawing</div>
   <h1>Runs</h1>
-  <div class="cards">__CARDS__</div>
+  __SECTIONS__
   __EMPTY__
 </div>
 </body>
@@ -86,7 +87,7 @@ CARD = """<a class="card" href="/runs/{dirname}/report.html">
   <span class="info">
     <span class="target">{target}</span>
     <span class="score"><strong>{score}</strong> best &middot; <span class="{cls}">{verdict}</span></span>
-    <span class="meta">{seats} agents &middot; {turns} turns{traces}</span>
+    <span class="meta">{seats} agent{plural} &middot; {turns} turns{model}{traces}</span>
     <span class="meta">{when}</span>
     <span class="meta">{dirname}</span>
   </span>
@@ -104,7 +105,8 @@ def thumb_pixels(canvas: list[str], width: int) -> str:
     return "".join(parts)
 
 
-def run_card(run_dir: Path) -> str | None:
+def run_card(run_dir: Path) -> tuple[str, float, str] | None:
+    """Return (environment key, mtime, card html) for a run directory."""
     results_path = run_dir / "results.json"
     if not results_path.exists():
         return None
@@ -112,14 +114,15 @@ def run_card(run_dir: Path) -> str | None:
         results = json.loads(results_path.read_text())
     except json.JSONDecodeError:
         return None
-    canvas = results.get("final_canvas") or []
-    width = 0
+    config = {}
     config_path = run_dir / "config.json"
     if config_path.exists():
         try:
-            width = int(json.loads(config_path.read_text()).get("width", 0))
+            config = json.loads(config_path.read_text())
         except json.JSONDecodeError:
             pass
+    canvas = results.get("final_canvas") or []
+    width = int(config.get("width", 0))
     if not width and canvas:
         width = int(math.isqrt(len(canvas)))
     height = len(canvas) // width if width else 0
@@ -127,9 +130,14 @@ def run_card(run_dir: Path) -> str | None:
     if best is None:
         best = max(results.get("scores") or [0])
     passed = bool(results.get("evaluation_passed"))
+    seats = len(results.get("accepted_pixels", []))
+    turns = results.get("turns", "?")
+    model = config.get("model")
     trace_count = len(list(run_dir.glob("trace-*.jsonl")))
-    when = datetime.fromtimestamp(results_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-    return CARD.format(
+    mtime = results_path.stat().st_mtime
+    when = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+    environment = config.get("environment") or f"{results.get('target', '?')} &middot; {turns} turns"
+    card = CARD.format(
         dirname=run_dir.name,
         w=width or 1,
         h=height or 1,
@@ -138,22 +146,32 @@ def run_card(run_dir: Path) -> str | None:
         score=f"{best * 100:.1f}%",
         cls="pass" if passed else "fail",
         verdict="PASS" if passed else "not passing",
-        seats=len(results.get("accepted_pixels", [])),
-        turns=results.get("turns", "?"),
+        seats=seats,
+        plural="" if seats == 1 else "s",
+        turns=turns,
+        model=f" &middot; {model}" if model else "",
         traces=" &middot; agent traces" if trace_count else "",
         when=when,
     )
+    return environment, mtime, card
 
 
 def index_page() -> str:
-    run_dirs = sorted(
-        (d for d in RUNS_DIR.iterdir() if d.is_dir()) if RUNS_DIR.exists() else [],
-        key=lambda d: d.stat().st_mtime,
-        reverse=True,
-    )
-    cards = [card for card in (run_card(d) for d in run_dirs) if card]
-    empty = "" if cards else '<p class="empty">No runs yet. Start one with scripts/run_agent_episode.py.</p>'
-    return PAGE.replace("__CARDS__", "".join(cards)).replace("__EMPTY__", empty)
+    run_dirs = (d for d in RUNS_DIR.iterdir() if d.is_dir()) if RUNS_DIR.exists() else []
+    groups: dict[str, list[tuple[float, str]]] = {}
+    for run_dir in run_dirs:
+        entry = run_card(run_dir)
+        if entry:
+            environment, mtime, card = entry
+            groups.setdefault(environment, []).append((mtime, card))
+    sections = []
+    for environment, entries in sorted(
+        groups.items(), key=lambda item: max(m for m, _ in item[1]), reverse=True
+    ):
+        cards = "".join(card for _, card in sorted(entries, reverse=True))
+        sections.append(f'<h2>{environment}</h2><div class="cards">{cards}</div>')
+    empty = "" if sections else '<p class="empty">No runs yet. Start one with codrawing-run.</p>'
+    return PAGE.replace("__SECTIONS__", "".join(sections)).replace("__EMPTY__", empty)
 
 
 class RunsHandler(SimpleHTTPRequestHandler):

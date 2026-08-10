@@ -65,6 +65,7 @@ async def run(
         "player_connect_timeout_seconds": 60,
         "action_timeout_seconds": 300,
         "model": model,
+        "environment": f"{target} · {turns} turns",
     }
     if turns_per_round:
         config["turns_per_round"] = turns_per_round
@@ -121,9 +122,10 @@ async def run(
                 )
             )
         await server.wait()
+        # Seats run a post-episode interview after the final frame; give them time.
         for player in players:
             try:
-                await asyncio.wait_for(player.wait(), timeout=20)
+                await asyncio.wait_for(player.wait(), timeout=180)
             except TimeoutError:
                 player.kill()
         for log in logs:

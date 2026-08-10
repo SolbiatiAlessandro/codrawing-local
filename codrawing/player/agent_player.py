@@ -74,6 +74,13 @@ DEFAULT_POLICY = """How to play each turn:
    ("agent N takes (x,y)"), not vague zones. Long file work is only worth it once, early, to
    compute the full point plan. Infer the classifier's behavior from score deltas."""
 
+DEFAULT_SOLO_POLICY = """How to play each turn:
+1. Plan in your private workspace: keep a PLAN file with the full point plan, use python to
+   compute exact coordinates. Long file work is only worth it once, early.
+2. Call paint_pixel EXACTLY ONCE with the most score-improving pixel, then end your reply.
+3. Track the classifier's score delta after every pixel and adapt the plan; infer its behavior
+   from the deltas."""
+
 
 def claude_environment() -> None:
     """Set env for the claude subprocess spawned by the agent SDK."""
@@ -84,6 +91,7 @@ def claude_environment() -> None:
 
 
 def build_system_prompt(observation: dict[str, Any], slot: int) -> str:
+    seat_count = len(observation.get("player_names", [])) or 1
     rounds = int(observation.get("rounds", 1) or 1)
     round_line = (
         f"The episode has {rounds} rounds of {observation.get('turns_per_round')} turns. "
@@ -93,7 +101,7 @@ def build_system_prompt(observation: dict[str, Any], slot: int) -> str:
     )
     game = GAME_PROMPT.format(
         slot=slot,
-        seat_count=len(observation.get("player_names", [])) or "several",
+        seat_count=seat_count,
         width=observation["width"],
         height=observation["height"],
         target=observation["target"],
@@ -101,8 +109,16 @@ def build_system_prompt(observation: dict[str, Any], slot: int) -> str:
         round_line=round_line,
         color=SEAT_COLORS[slot],
     )
+    if seat_count == 1:
+        game += (
+            "\nYou are the only agent in this episode: there is no one to coordinate with, "
+            "collisions cannot happen, and the message board is your private log."
+        )
     policy_file = os.environ.get("AGENT_POLICY_FILE")
-    policy = Path(policy_file).read_text() if policy_file else DEFAULT_POLICY
+    if policy_file:
+        policy = Path(policy_file).read_text()
+    else:
+        policy = DEFAULT_SOLO_POLICY if seat_count == 1 else DEFAULT_POLICY
     # Plain token substitution: policy files may contain braces (JSON, code).
     policy = policy.replace("{slot}", str(slot)).replace("{color}", SEAT_COLORS[slot])
     return f"{game}\n\n# Your policy\n{policy}"
@@ -127,6 +143,7 @@ class Seat:
         self.slot: int | None = None
         self.turn: int = 0
         self.painted: bool = False
+        self.game_over: bool = False
         self.board: list[dict[str, Any]] = []
         self.observations: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
@@ -149,9 +166,11 @@ class Seat:
                             self.board.append(message)
                     await self.observations.put(payload)
                 elif kind == "final":
+                    self.game_over = True
                     await self.observations.put(None)
                     return
         except websockets.ConnectionClosed:
+            self.game_over = True
             await self.observations.put(None)
 
 
@@ -164,6 +183,8 @@ seat = Seat()
     {"text": str},
 )
 async def message_board_send(args: dict[str, Any]) -> dict[str, Any]:
+    if seat.game_over:
+        return {"content": [{"type": "text", "text": "the episode is over"}]}
     text = str(args.get("text", ""))[:240]
     await seat.websocket.send(json.dumps({"type": "message", "turn": seat.turn, "text": text}))
     return {"content": [{"type": "text", "text": "posted"}]}
@@ -175,7 +196,7 @@ async def message_board_send(args: dict[str, Any]) -> dict[str, Any]:
     {},
 )
 async def message_board_read(args: dict[str, Any]) -> dict[str, Any]:
-    tail = seat.board[-30:]
+    tail = seat.board[-100:]
     text = "\n".join(f"T{m['turn']} agent{m['slot']}: {m['text']}" for m in tail) or "(board is empty)"
     return {"content": [{"type": "text", "text": text}]}
 
@@ -187,6 +208,8 @@ async def message_board_read(args: dict[str, Any]) -> dict[str, Any]:
     {"x": int, "y": int, "color": str},
 )
 async def paint_pixel(args: dict[str, Any]) -> dict[str, Any]:
+    if seat.game_over:
+        return {"content": [{"type": "text", "text": "the episode is over"}]}
     if seat.painted:
         return {"content": [{"type": "text", "text": "you already painted this turn"}]}
     try:
@@ -269,8 +292,20 @@ async def main() -> None:
                 cwd=str(workspace),
                 model=model,
                 max_turns=30,
+                # Without a display setting the CLI emits thinking blocks with
+                # empty content; summarized keeps the reasoning in the trace.
+                thinking={"type": "adaptive", "display": "summarized"},
             )
             async with ClaudeSDKClient(options=options) as client:
+                session_cost = 0.0
+
+                def cost_delta(usage: dict[str, Any]) -> None:
+                    nonlocal session_cost
+                    cumulative = usage.pop("session_cost_usd", None)
+                    if cumulative is not None:
+                        usage["cost_usd"] = round(max(0.0, cumulative - session_cost), 6)
+                        session_cost = cumulative
+
                 observation: dict[str, Any] | None = first
                 while observation is not None:
                     seat.turn = int(observation["turn"])
@@ -300,9 +335,11 @@ async def main() -> None:
                         if reply:
                             print(f"turn {seat.turn}: no paint in reply: {reply[:200]}", flush=True)
                         prompt = "You have not painted yet. Call paint_pixel immediately."
+                    cost_delta(usage)
                     trace.write(
                         {
                             "slot": seat.slot,
+                            "phase": "turn",
                             "turn": seat.turn,
                             "painted": seat.painted,
                             "wall_seconds": round(time.monotonic() - turn_started, 2),
@@ -325,6 +362,38 @@ async def main() -> None:
                     else:
                         print(f"turn {seat.turn}: no paint submitted", flush=True)
                     observation = await seat.observations.get()
+
+                # Post-episode interview: one final reflection, recorded in the trace.
+                interview_started = time.monotonic()
+                events = []
+                usage = {}
+                try:
+                    await asyncio.wait_for(
+                        _run_query(
+                            client,
+                            "The episode is over. Write a short debrief for the team notebook: "
+                            "(1) How did it go? (2) What did you learn about the classifier and "
+                            "about coordinating with the other agents? (3) What would you change "
+                            "next time? Do not call any game tools; just answer.",
+                            events,
+                            usage,
+                        ),
+                        timeout=120,
+                    )
+                except (TimeoutError, asyncio.TimeoutError):
+                    events.append({"type": "timeout", "budget_seconds": 120})
+                except Exception as exc:
+                    events.append({"type": "error", "error": repr(exc)})
+                cost_delta(usage)
+                trace.write(
+                    {
+                        "slot": seat.slot,
+                        "phase": "interview",
+                        "wall_seconds": round(time.monotonic() - interview_started, 2),
+                        "usage": usage,
+                        "events": events,
+                    }
+                )
         finally:
             reader.cancel()
 
@@ -351,7 +420,8 @@ async def _run_query(
                 continue
             thinking = getattr(block, "thinking", None)
             if thinking is not None:
-                events.append({"type": "thinking", "text": _clip(str(thinking))})
+                if str(thinking).strip():
+                    events.append({"type": "thinking", "text": _clip(str(thinking))})
                 continue
             name = getattr(block, "name", None)
             if name is not None:
@@ -369,7 +439,8 @@ async def _run_query(
                     usage[key] = usage.get(key, 0) + int(message_usage[key])
         cost = getattr(message, "total_cost_usd", None)
         if cost is not None:
-            usage["cost_usd"] = round(usage.get("cost_usd", 0.0) + float(cost), 6)
+            # Cumulative for the whole session; the caller converts to a delta.
+            usage["session_cost_usd"] = round(float(cost), 6)
         duration = getattr(message, "duration_ms", None)
         if duration is not None:
             usage["duration_ms"] = usage.get("duration_ms", 0) + int(duration)

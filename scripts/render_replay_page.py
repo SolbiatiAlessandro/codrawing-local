@@ -150,7 +150,13 @@ details.agent > summary .meta { font-weight: 400; color: var(--muted); }
 .tturn { border-left: 3px solid var(--grid); padding-left: 12px; }
 .tturn .tthead { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
 .ev { font-size: 12.5px; line-height: 1.55; margin: 4px 0; overflow-wrap: anywhere; }
-.ev.think { color: var(--muted); font-style: italic; }
+.ev.think { color: var(--muted); font-style: italic; border-left: 2px solid var(--accent); padding-left: 9px; }
+.evtag {
+  display: inline-block; font-style: normal; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent);
+  margin-right: 6px;
+}
+.tturn.interview { border-left-color: var(--accent); }
 .ev.tool { }
 .ev.tool code { background: var(--paper); border: 1px solid var(--grid); border-radius: 3px; padding: 1px 5px; }
 .ev.fail { color: var(--bad); }
@@ -230,10 +236,20 @@ document.getElementById("title").textContent =
   "Target: " + frames[0].target + " \\u00b7 " + seatCount + " agents \\u00b7 " + frames[0].max_turns + " turns";
 document.getElementById("canvastitle").textContent = "Canvas (" + W + "\\u00d7" + H + ")";
 
+function turnRecords(recs) { return recs.filter(r => (r.phase || "turn") === "turn"); }
+
+// Older traces recorded the session-cumulative cost each turn; detect and use the last value.
+function totalCost(recs) {
+  const costs = recs.map(r => (r.usage && r.usage.cost_usd) || 0).filter(c => c > 0);
+  if (!costs.length) return 0;
+  const cumulative = costs.length >= 3 && costs.every((c, i) => i === 0 || c >= costs[i - 1] - 1e-9);
+  return cumulative ? costs[costs.length - 1] : costs.reduce((a, b) => a + b, 0);
+}
+
 // Per-frame trace lookup: agent trace turn t produced the frame stamped t+1.
 const traceByTurn = {};
 for (const slot of Object.keys(traces)) {
-  for (const rec of traces[slot]) {
+  for (const rec of turnRecords(traces[slot])) {
     const frameTurn = rec.turn + 1;
     (traceByTurn[frameTurn] = traceByTurn[frameTurn] || {})[slot] = rec;
   }
@@ -252,13 +268,13 @@ const finalFb = results.final_image_model_feedback || {};
 const bestScore = results.best_target_score !== undefined
   ? results.best_target_score
   : Math.max(...frames.map(fr => fr.image_model_feedback ? fr.image_model_feedback.target_score : 0));
-let totalOut = 0, totalCost = 0, totalSeconds = 0;
+let totalOut = 0, totalCostAll = 0, totalSeconds = 0;
 for (const fr of frames) {
   const u = frameUsage(fr.turn);
   for (const s of Object.keys(u.tokens)) totalOut += u.tokens[s];
   totalSeconds += u.seconds;
-  for (const s of Object.keys(u.bySlot)) totalCost += (u.bySlot[s].usage && u.bySlot[s].usage.cost_usd) || 0;
 }
+for (const slot of Object.keys(traces)) totalCostAll += totalCost(traces[slot]);
 const stats = [
   ["best score", (bestScore * 100).toFixed(1) + "%", ""],
   ["final score", finalFb.target_score !== undefined ? (finalFb.target_score * 100).toFixed(1) + "%" : "\\u2014", ""],
@@ -268,7 +284,7 @@ const stats = [
 ];
 if (hasTraces) {
   stats.push(["output tokens", fmtTokens(totalOut), ""]);
-  if (totalCost) stats.push(["cost", "$" + totalCost.toFixed(2), ""]);
+  if (totalCostAll) stats.push(["cost (api equiv)", "$" + totalCostAll.toFixed(2), ""]);
   stats.push(["agent time", Math.round(totalSeconds / 60) + "m", ""]);
 }
 document.getElementById("stats").innerHTML = stats.map(([k, v, cls]) =>
@@ -440,7 +456,8 @@ for (const id of ["score-svg", "tokens-svg", "time-svg"]) {
 // Collapsible full trace per agent.
 function eventHtml(ev) {
   if (ev.type === "text") return '<p class="ev">' + esc(ev.text) + "</p>";
-  if (ev.type === "thinking") return '<p class="ev think">' + esc(ev.text) + "</p>";
+  if (ev.type === "thinking")
+    return '<p class="ev think"><span class="evtag">thinking</span>' + esc(ev.text) + "</p>";
   if (ev.type === "tool_use")
     return '<div class="ev tool">&#8594; <strong>' + esc(ev.name) + "</strong> <code>" + esc(ev.input) + "</code></div>";
   if (ev.type === "tool_result")
@@ -451,14 +468,19 @@ function eventHtml(ev) {
 }
 if (hasTraces) {
   document.getElementById("traces").innerHTML = Object.keys(traces).sort().map(slot => {
-    const recs = traces[slot];
-    let out = 0, cost = 0, secs = 0, painted = 0;
+    const recs = turnRecords(traces[slot]);
+    const interview = traces[slot].find(r => r.phase === "interview");
+    let out = 0, secs = 0, painted = 0;
     for (const r of recs) {
       out += (r.usage && r.usage.output_tokens) || 0;
-      cost += (r.usage && r.usage.cost_usd) || 0;
       secs += r.wall_seconds || 0;
       if (r.painted) painted++;
     }
+    const cost = totalCost(traces[slot]);
+    const interviewBlock = interview
+      ? '<div class="tturn interview"><div class="tthead">post-episode interview</div>' +
+        (interview.events || []).map(eventHtml).join("") + "</div>"
+      : "";
     const body = recs.map(r =>
       '<div class="tturn"><div class="tthead">turn ' + (r.turn + 1) + " \\u00b7 " + (r.wall_seconds || 0).toFixed(1) +
       "s \\u00b7 " + fmtTokens((r.usage && r.usage.output_tokens) || 0) + " out" +
@@ -469,8 +491,9 @@ if (hasTraces) {
       esc(names[slot] || ("Agent " + slot)) +
       '<span class="meta">painted ' + painted + "/" + recs.length + " turns \\u00b7 " + fmtTokens(out) +
       " tokens out \\u00b7 " + (cost ? "$" + cost.toFixed(2) + " \\u00b7 " : "") +
-      (recs.length ? (secs / recs.length).toFixed(1) : 0) + "s avg</span></summary>" +
-      '<div class="trace">' + body + "</div></details>";
+      (recs.length ? (secs / recs.length).toFixed(1) : 0) + "s avg" +
+      (interview ? " \\u00b7 interview" : "") + "</span></summary>" +
+      '<div class="trace">' + interviewBlock + body + "</div></details>";
   }).join("");
 } else {
   document.getElementById("tokens-card").style.display = "none";

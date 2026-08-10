@@ -38,6 +38,17 @@ policies collide — every seat computes the same "best pixel" and the
 collision rule drops them all. Good policies derive each seat's share of the
 work from its seat number.
 
+`--seats 1` is the single-model baseline: the agent gets a solo prompt (no
+coordination, no collisions, the board is its private log). Compare against
+group runs in the same environment — the runs home page groups runs by
+environment (target + turns). For pixel parity give the solo run seats x
+turns total turns (for example 4 agents x 20 turns vs `--seats 1 --turns 80`).
+
+After the final turn every agent answers a post-episode interview (how it
+went, what it learned, what to change next time), recorded in its trace and
+shown at the top of its panel in the report. Traces also capture the model's
+summarized thinking, every tool call, token usage, and per-turn timing.
+
 Single-call CLI seats (faster, cheaper, alternates `codex` and `claude`):
 
 ```bash
