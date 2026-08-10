@@ -25,8 +25,18 @@ uv pip install -e .
 Full agent seats (one persistent Claude Code session per seat):
 
 ```bash
-.venv/bin/python scripts/run_agent_episode.py --seats 5 --turns 20 --target "light bulb"
+.venv/bin/codrawing-run --target "light bulb" --turns 20
+.venv/bin/codrawing-run --target cat --rounds 2 --turns-per-round 10 \
+    --model claude-sonnet-5 \
+    --policy "outline the silhouette first, then fill gaps"
 ```
+
+`--policy` (inline text) or `--policy-file` replaces the default policy
+prompt for every seat; the fixed game prompt never changes. The policy is
+saved to the run directory as `policy.md`. Warning: identical deterministic
+policies collide — every seat computes the same "best pixel" and the
+collision rule drops them all. Good policies derive each seat's share of the
+work from its seat number.
 
 Single-call CLI seats (faster, cheaper, alternates `codex` and `claude`):
 

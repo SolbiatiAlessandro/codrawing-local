@@ -14,5 +14,8 @@ dependencies = [
   "claude-agent-sdk>=0.2",
 ]
 
+[project.scripts]
+codrawing-run = "codrawing.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["codrawing"]
