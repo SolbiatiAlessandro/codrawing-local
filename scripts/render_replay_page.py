@@ -497,10 +497,10 @@ if (hasTraces) {
       'style="display:inline-block;background:' + SEATS[slot] + '"></span> ' +
       esc(names[slot] || ("Agent " + slot)) + "</div>" + (text || '<p class="ev">(no answer)</p>') + "</div>";
   }).join("");
-  if (interviewCards) {
-    document.getElementById("interviews").style.display = "";
-    document.getElementById("interviews-body").innerHTML = interviewCards;
-  }
+  document.getElementById("interviews").style.display = "";
+  document.getElementById("interviews-body").innerHTML = interviewCards ||
+    '<p class="ev" style="color:var(--muted)">Not recorded \\u2014 this run predates the ' +
+    "post-episode interview feature. Runs started after it always include one interview per agent.</p>";
   document.getElementById("traces").innerHTML = Object.keys(traces).sort().map(slot => {
     const recs = turnRecords(traces[slot]);
     const interview = traces[slot].find(r => r.phase === "interview");
