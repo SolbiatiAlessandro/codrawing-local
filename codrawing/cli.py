@@ -92,7 +92,7 @@ async def run(
     )
     try:
         await wait_for_server(port)
-        print(f"live viewer: http://127.0.0.1:{port}/global")
+        print(f"live viewer: http://127.0.0.1:{port}/client/global", flush=True)
         players, logs = [], []
         for slot in range(seats):
             workspace = run_dir / f"workspace-{slot}"
