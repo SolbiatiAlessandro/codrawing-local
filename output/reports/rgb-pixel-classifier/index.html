@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RGB Pixel Classifier — CoDrawing</title>
+  <style>
+    :root { --bg:#f6f4ef; --card:#fff; --ink:#172033; --muted:#667085; --line:#ddd8ce; --blue:#3157d5; --green:#18794e; --gold:#e5a326; --red:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    a { color:var(--blue); text-underline-offset:2px; }
+    header,main,footer { width:min(1060px,calc(100% - 32px)); margin:auto; }
+    header { padding:56px 0 30px; }
+    .kicker { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+    h1 { margin:8px 0 12px; max-width:850px; font:800 clamp(38px,7vw,70px)/1 Georgia,serif; letter-spacing:-.035em; }
+    h2 { margin:0 0 13px; font:750 clamp(25px,4vw,38px)/1.12 Georgia,serif; }
+    h3 { margin:0 0 6px; font-size:17px; }
+    p { margin:0 0 13px; }
+    .lede { max-width:820px; color:#445066; font-size:20px; }
+    .meta,.note { color:var(--muted); font-size:13px; }
+    main { display:grid; gap:20px; padding-bottom:48px; }
+    section,.hero { padding:clamp(22px,4vw,36px); background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 8px 26px rgba(23,32,51,.05); }
+    .hero { display:grid; grid-template-columns:1.4fr .8fr; gap:24px; align-items:center; }
+    .verdict { font:750 clamp(25px,4vw,42px)/1.12 Georgia,serif; }
+    .verdict strong { color:var(--green); }
+    .metric { padding:21px; border-radius:13px; background:#edf8f2; border:1px solid #b8dec9; }
+    .metric .big { color:var(--green); font:800 54px/1 Georgia,serif; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+    .mini { border:1px solid var(--line); border-radius:12px; padding:17px; background:#fcfbf8; }
+    figure { margin:18px 0 0; }
+    img { display:block; width:100%; height:auto; border:1px solid var(--line); border-radius:11px; }
+    figcaption { margin-top:8px; color:var(--muted); font-size:13px; }
+    .table-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; }
+    table { width:100%; min-width:690px; border-collapse:collapse; background:white; }
+    th,td { padding:11px 13px; text-align:left; border-bottom:1px solid #ece8e0; vertical-align:top; }
+    th { background:#f3f1ec; color:#596273; text-transform:uppercase; letter-spacing:.06em; font-size:11px; }
+    tr:last-child td { border-bottom:0; }
+    .best td { background:#edf8f2; }
+    .pass { color:var(--green); font-weight:800; }
+    .fail { color:var(--red); font-weight:800; }
+    .bar { width:180px; max-width:100%; height:9px; margin-top:5px; background:#e8e5de; border-radius:99px; overflow:hidden; }
+    .bar i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--gold),#f4c95d); }
+    .callout { padding:15px 17px; border-left:5px solid var(--gold); border-radius:4px 10px 10px 4px; background:#fff8e6; }
+    .warning { border-left-color:var(--red); background:#fff2f0; }
+    .flow { display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:10px; align-items:center; margin-top:18px; }
+    .flow div { padding:13px; text-align:center; border:1px solid var(--line); border-radius:10px; background:#faf9f6; }
+    .flow span { color:var(--muted); font-weight:800; }
+    code { padding:2px 5px; background:#efede7; border-radius:4px; font:.9em ui-monospace,SFMono-Regular,Menlo,monospace; }
+    ol { padding-left:22px; }
+    li { margin:8px 0; }
+    footer { padding-bottom:44px; color:var(--muted); font-size:13px; }
+    @media(max-width:740px){ .hero,.grid{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.flow span{transform:rotate(90deg)}header{padding-top:36px} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="kicker">CoDrawing · RGB classifier experiment</div>
+    <h1>One classifier, with color built in</h1>
+    <p class="lede">The clean candidate is an official MobileNetV3-small backbone fine-tuned on native RGB pixel canvases. Shape and color enter the same network and produce one 10-class probability vector—no text prompts and no separate palette bonus.</p>
+    <p class="meta">Prepared 10 August 2026 · exploratory local result · exact outputs are linked in <a href="results.json">results.json [D1]</a></p>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <div class="kicker">Recommendation</div>
+        <p class="verdict">Use <strong>MobileNetV3-small</strong> as the production architecture, then fine-tune it on our actual colored pixel-canvas distribution.</p>
+        <p>MobileNetV3-small is an official, mobile-oriented image-classification architecture available directly from TorchVision <a href="https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.mobilenet_v3_small.html">[S1]</a>. The target-specific final layer is ours; there is no trustworthy off-the-shelf checkpoint with CoDrawing's classes and visual style.</p>
+      </div>
+      <div class="metric">
+        <div class="big">99.1%</div>
+        <strong>canonical bulb score</strong>
+        <p class="note">Same geometry, gold globe + slate base. Exploratory closed-set probability, not a production accuracy claim <a href="results.json">[D1]</a>.</p>
+      </div>
+    </div>
+
+    <section>
+      <h2>Why this is the cleaner design</h2>
+      <div class="flow" aria-label="RGB canvas passes through one MobileNet and one softmax head">
+        <div>24×24 RGB canvas</div><span>→</span><div>MobileNetV3-small</div><span>→</span><div>10 class logits</div>
+      </div>
+      <p style="margin-top:18px">The target score is simply <code>softmax(logits)[target]</code>. Correct color can raise that number because the convolutional filters learn color and shape together. There is no hand-authored color distance and no language encoder at runtime.</p>
+    </section>
+
+    <section>
+      <h2>Controlled color result</h2>
+      <p>The geometry below is identical in every tile. Only its palette or background changes.</p>
+      <figure>
+        <img src="assets/color-variants.png" alt="The same pixel light bulb in eight foreground and background color combinations">
+        <figcaption>Color-controlled light-bulb variants used for the canvas-style probe <a href="assets/color-variants.png">[A1]</a>.</figcaption>
+      </figure>
+      <div class="table-wrap" style="margin-top:18px">
+        <table>
+          <thead><tr><th>Palette</th><th>Bulb probability</th><th>Rank / prediction</th><th>Reading</th></tr></thead>
+          <tbody>
+            <tr><td>Black / white</td><td>88.14%<div class="bar"><i style="width:88.14%"></i></div></td><td>#1 · light bulb</td><td>Shape remains sufficient</td></tr>
+            <tr><td>Gold / white</td><td>95.30%<div class="bar"><i style="width:95.30%"></i></div></td><td>#1 · light bulb</td><td>Correct main hue helps</td></tr>
+            <tr><td>Orange / white</td><td>81.80%<div class="bar"><i style="width:81.80%"></i></div></td><td>#1 · light bulb</td><td>Related warm hue</td></tr>
+            <tr><td>Blue / white</td><td>74.86%<div class="bar"><i style="width:74.86%"></i></div></td><td>#1 · light bulb</td><td>Wrong hue lowers confidence</td></tr>
+            <tr><td>Green / white</td><td>0.31%<div class="bar"><i style="width:.31%"></i></div></td><td>#4 · pear</td><td class="fail">Color shortcut is too strong</td></tr>
+            <tr class="best"><td><strong>Gold + slate / white</strong></td><td><strong>99.12%</strong><div class="bar"><i style="width:99.12%"></i></div></td><td class="pass">#1 · light bulb</td><td class="pass">Canonical palette wins</td></tr>
+            <tr><td>White / black</td><td>21.73%<div class="bar"><i style="width:21.73%"></i></div></td><td>#2 · hot-air balloon wins</td><td>Background not covered</td></tr>
+            <tr><td>Gold / dark</td><td>26.88%<div class="bar"><i style="width:26.88%"></i></div></td><td>#1 · light bulb</td><td>Correct rank, weak confidence</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout" style="margin-top:18px"><strong>Inference from D1:</strong> the requested behavior is achievable—canonical color scores highest—but the green failure shows why training must include enough alternate palettes. Color should be evidence, not permission for the network to ignore shape.</div>
+    </section>
+
+    <section>
+      <h2>Size and held-out measurements</h2>
+      <div class="grid">
+        <div class="mini"><h3>Small deployment</h3><p><strong>1.53M parameters · 6.25 MB checkpoint</strong></p><p class="note">Replacing ImageNet's 1,000-way head with ten classes makes this fine-tuned model smaller than the stock checkpoint <a href="results.json">[D1]</a>.</p></div>
+        <div class="mini"><h3>Fast local inference</h3><p><strong>23.4 ms median · 25.1 ms p95</strong></p><p class="note">Single 28×28 image, CPU, 300 timed passes after warm-up on this machine <a href="results.json">[D1]</a>.</p></div>
+      </div>
+      <div class="table-wrap" style="margin-top:18px">
+        <table>
+          <thead><tr><th>Held-out condition</th><th>Accuracy</th><th>Mean true-class probability</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr class="best"><td>Canonical class colors</td><td>98.68%</td><td>96.12%</td><td>Best condition</td></tr>
+            <tr><td>Grayscale</td><td>82.48%</td><td>78.21%</td><td>Shape still works</td></tr>
+            <tr><td>Deliberately wrong colors</td><td>70.20%</td><td>65.16%</td><td>Wrong color lowers scores</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>What is—and is not—ready</h2>
+      <div class="grid">
+        <div>
+          <h3>Architecture: yes</h3>
+          <p>MobileNetV3-small is the strongest clean candidate: conventional RGB classification, one output head, modest file size, and straightforward export to ONNX or TFLite. The official architecture was designed for low-resource use <a href="https://arxiv.org/abs/1905.02244">[S2]</a>.</p>
+          <p><a href="model/mobilenet_v3_small_rgb_classifier.pt">Download the experimental checkpoint [M1]</a>.</p>
+        </div>
+        <div>
+          <h3>Training corpus: not yet</h3>
+          <p>The experiment temporarily used recolored sketch bitmaps plus procedurally varied canvas outlines to isolate the architecture and color behavior. Because we do not want Quick Draw as the product data source, <strong>this checkpoint should not be merged as the game model.</strong></p>
+        </div>
+      </div>
+      <div class="callout warning" style="margin-top:18px"><strong>Required next step:</strong> retrain the same model on saved CoDrawing canvases and independently authored 24×24 target examples, with canonical, alternate, grayscale, incomplete, and dark-background variants. Keep an untouched human-drawn test set.</div>
+    </section>
+
+    <section>
+      <h2>Available colored datasets</h2>
+      <p>No credible ready-made small classifier surfaced with both CoDrawing's object vocabulary and colored pixel-art training. Two datasets can help with domain pretraining, but neither replaces target-specific examples:</p>
+      <div class="grid">
+        <div class="mini"><h3>PixelGPT 24×24</h3><p>20,000 native 24×24 sprites, at most five colors, 133 categories, CC BY 4.0. It is well matched to resolution and palette, but its categories do not cover our target set cleanly <a href="https://huggingface.co/datasets/unstonio/pixelgpt-24x24-20k">[S3]</a>.</p></div>
+        <div class="mini"><h3>Icon645</h3><p>645,687 colored icons over 377 classes; useful evidence that icon-domain pretraining beats natural-image features. Its released research assets are larger, and the reported dataset license is CC BY-NC-SA, so it needs a usage review <a href="https://iconqa.github.io/">[S4]</a>.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>References and evidence</h2>
+      <ol>
+        <li><a href="https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.mobilenet_v3_small.html">TorchVision — official MobileNetV3-small builder and weights [S1]</a>.</li>
+        <li><a href="https://arxiv.org/abs/1905.02244">Howard et al. — Searching for MobileNetV3 [S2]</a>.</li>
+        <li><a href="https://huggingface.co/datasets/unstonio/pixelgpt-24x24-20k">PixelGPT 24×24 — 20K dataset card [S3]</a>.</li>
+        <li><a href="https://iconqa.github.io/">IconQA / Icon645 project page [S4]</a>.</li>
+        <li><a href="results.json">Complete local measurements [D1]</a>; <a href="assets/color-variants.png">controlled image asset [A1]</a>; <a href="model/mobilenet_v3_small_rgb_classifier.pt">experimental checkpoint [M1]</a>.</li>
+      </ol>
+    </section>
+  </main>
+  <footer>All percentages are closed-set experimental outputs. They demonstrate comparative behavior under controlled changes; they are not calibrated confidence or production accuracy estimates.</footer>
+</body>
+</html>

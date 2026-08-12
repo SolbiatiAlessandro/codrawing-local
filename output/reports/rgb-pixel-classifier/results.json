@@ -1,0 +1,271 @@
+{
+  "architecture": "official TorchVision MobileNetV3-small, fine-tuned RGB 10-class softmax",
+  "parameters": 1528106,
+  "checkpoint_size_bytes": 6253995,
+  "training_samples": 17400,
+  "validation_samples_per_condition": 2500,
+  "cpu_median_ms": 23.43070849999762,
+  "cpu_p95_ms": 25.061829150001103,
+  "evaluations": {
+    "canonical": {
+      "accuracy": 0.9868,
+      "mean_true_class_probability": 0.9611779451370239,
+      "mean_winning_probability": 0.9681978225708008
+    },
+    "wrong": {
+      "accuracy": 0.702,
+      "mean_true_class_probability": 0.6515644192695618,
+      "mean_winning_probability": 0.8233962059020996
+    },
+    "gray": {
+      "accuracy": 0.8248,
+      "mean_true_class_probability": 0.7820584774017334,
+      "mean_winning_probability": 0.8854562640190125
+    },
+    "synthetic_canonical": {
+      "accuracy": 1.0,
+      "mean_true_class_probability": 0.9851372838020325,
+      "mean_winning_probability": 0.9851372838020325
+    },
+    "synthetic_wrong": {
+      "accuracy": 0.996,
+      "mean_true_class_probability": 0.9747809171676636,
+      "mean_winning_probability": 0.9767343401908875
+    }
+  },
+  "asset_scores": {
+    "black_on_white": {
+      "light_bulb_probability": 0.8813859820365906,
+      "rank": 1,
+      "top3": [
+        {
+          "label": "light bulb",
+          "probability": 0.8813859820365906
+        },
+        {
+          "label": "flashlight",
+          "probability": 0.047601133584976196
+        },
+        {
+          "label": "clock",
+          "probability": 0.023786649107933044
+        }
+      ]
+    },
+    "blue_on_white": {
+      "light_bulb_probability": 0.748588502407074,
+      "rank": 1,
+      "top3": [
+        {
+          "label": "light bulb",
+          "probability": 0.748588502407074
+        },
+        {
+          "label": "flashlight",
+          "probability": 0.12196400761604309
+        },
+        {
+          "label": "clock",
+          "probability": 0.07984768599271774
+        }
+      ]
+    },
+    "gold_on_dark": {
+      "light_bulb_probability": 0.26875045895576477,
+      "rank": 1,
+      "top3": [
+        {
+          "label": "light bulb",
+          "probability": 0.26875045895576477
+        },
+        {
+          "label": "sun",
+          "probability": 0.2605123519897461
+        },
+        {
+          "label": "clock",
+          "probability": 0.15230092406272888
+        }
+      ]
+    },
+    "gold_on_white": {
+      "light_bulb_probability": 0.9530373215675354,
+      "rank": 1,
+      "top3": [
+        {
+          "label": "light bulb",
+          "probability": 0.9530373215675354
+        },
+        {
+          "label": "snowman",
+          "probability": 0.009663652628660202
+        },
+        {
+          "label": "clock",
+          "probability": 0.007326634135097265
+        }
+      ]
+    },
+    "green_on_white": {
+      "light_bulb_probability": 0.0031492894049733877,
+      "rank": 4,
+      "top3": [
+        {
+          "label": "pear",
+          "probability": 0.9747664332389832
+        },
+        {
+          "label": "hot air balloon",
+          "probability": 0.009310072287917137
+        },
+        {
+          "label": "sun",
+          "probability": 0.006312592886388302
+        }
+      ]
+    },
+    "multicolor_on_white": {
+      "light_bulb_probability": 0.9912319779396057,
+      "rank": 1,
+      "top3": [
+        {
+          "label": "light bulb",
+          "probability": 0.9912319779396057
+        },
+        {
+          "label": "snowman",
+          "probability": 0.00253903865814209
+        },
+        {
+          "label": "flashlight",
+          "probability": 0.0012991975527256727
+        }
+      ]
+    },
+    "orange_on_white": {
+      "light_bulb_probability": 0.8179813623428345,
+      "rank": 1,
+      "top3": [
+        {
+          "label": "light bulb",
+          "probability": 0.8179813623428345
+        },
+        {
+          "label": "hot air balloon",
+          "probability": 0.05910024419426918
+        },
+        {
+          "label": "pear",
+          "probability": 0.039600078016519547
+        }
+      ]
+    },
+    "white_on_black": {
+      "light_bulb_probability": 0.2173023223876953,
+      "rank": 2,
+      "top3": [
+        {
+          "label": "hot air balloon",
+          "probability": 0.3993381857872009
+        },
+        {
+          "label": "light bulb",
+          "probability": 0.2173023223876953
+        },
+        {
+          "label": "sun",
+          "probability": 0.13493189215660095
+        }
+      ]
+    }
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.890888591812945,
+      "training_accuracy": 0.7583333333333333,
+      "canonical_validation": {
+        "accuracy": 0.482,
+        "mean_true_class_probability": 0.3599408268928528,
+        "mean_winning_probability": 0.5280131697654724
+      }
+    },
+    {
+      "epoch": 2,
+      "loss": 0.39238217359301686,
+      "training_accuracy": 0.9164367816091954
+    },
+    {
+      "epoch": 3,
+      "loss": 0.30688741233157013,
+      "training_accuracy": 0.9436206896551724,
+      "canonical_validation": {
+        "accuracy": 0.9628,
+        "mean_true_class_probability": 0.8871517777442932,
+        "mean_winning_probability": 0.8999453186988831
+      }
+    },
+    {
+      "epoch": 4,
+      "loss": 0.26029775992207144,
+      "training_accuracy": 0.9595977011494253
+    },
+    {
+      "epoch": 5,
+      "loss": 0.22623189304751912,
+      "training_accuracy": 0.9714942528735632
+    },
+    {
+      "epoch": 6,
+      "loss": 0.20166741610943587,
+      "training_accuracy": 0.9824712643678161,
+      "canonical_validation": {
+        "accuracy": 0.984,
+        "mean_true_class_probability": 0.95537930727005,
+        "mean_winning_probability": 0.9634024500846863
+      }
+    },
+    {
+      "epoch": 7,
+      "loss": 0.18966061686647348,
+      "training_accuracy": 0.9851149425287357
+    },
+    {
+      "epoch": 8,
+      "loss": 0.17470194656958526,
+      "training_accuracy": 0.9913793103448276
+    },
+    {
+      "epoch": 9,
+      "loss": 0.16602481427548946,
+      "training_accuracy": 0.9944252873563219,
+      "canonical_validation": {
+        "accuracy": 0.984,
+        "mean_true_class_probability": 0.9583613276481628,
+        "mean_winning_probability": 0.9658166170120239
+      }
+    },
+    {
+      "epoch": 10,
+      "loss": 0.16008433578343226,
+      "training_accuracy": 0.9967816091954023
+    },
+    {
+      "epoch": 11,
+      "loss": 0.15722608357325368,
+      "training_accuracy": 0.9970689655172413
+    },
+    {
+      "epoch": 12,
+      "loss": 0.15567000870732056,
+      "training_accuracy": 0.9982758620689656,
+      "canonical_validation": {
+        "accuracy": 0.9868,
+        "mean_true_class_probability": 0.9611779451370239,
+        "mean_winning_probability": 0.9681978225708008
+      }
+    }
+  ],
+  "training_elapsed_seconds": 48.308728625,
+  "seed": 20260810
+}

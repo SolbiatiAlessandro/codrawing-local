@@ -90,15 +90,15 @@
   <header>
     <div class="eyebrow">CoDrawing model audit · local experiment</div>
     <h1>A small model that actually understands pixel drawings</h1>
-    <p class="lede">Four downloadable classifiers were tested on six light-bulb renderings and two negative controls. MobileCLIP2-S0 was the only candidate that handled outlines, disconnected pixels, filled shapes, and color without retraining.</p>
-    <p class="meta">Prepared 10 August 2026 · Synthetic exploratory benchmark · All percentages below are closed-set scores, not calibrated probabilities.</p>
+    <p class="lede">Four downloadable classifiers were tested on six light-bulb renderings and two negative controls. MobileCLIP2-S0 was the only candidate that handled outlines, disconnected pixels, filled shapes, and color without retraining <a class="source" href="benchmark-results.json">shape data [D1]</a> <a class="source" href="color-results.json">color data [D2]</a>.</p>
+    <p class="meta">Prepared 10 August 2026 · Synthetic exploratory benchmark · All percentages below are closed-set scores, not calibrated probabilities <a class="source" href="benchmark-results.json">method [D1]</a>.</p>
   </header>
 
   <main>
     <div class="hero-card">
       <div>
         <div class="eyebrow">Recommendation</div>
-        <p class="verdict">Use <strong>MobileCLIP2-S0</strong>, precompute the game-label text embeddings, and deploy only its image encoder.</p>
+        <p class="verdict"><small>Inference from D1/D2:</small><br>Use <strong>MobileCLIP2-S0</strong>, precompute the game-label text embeddings, and deploy only its image encoder.</p>
         <p>Apple publishes the implementation and checkpoints for MobileCLIP2. The model is designed for efficient image–text matching and zero-shot classification <a class="source" href="https://github.com/apple/ml-mobileclip">Apple repository [S1]</a>. The exact S0 checkpoint used here is published on Hugging Face under Apple’s research-model license <a class="source" href="https://huggingface.co/apple/MobileCLIP2-S0">Apple weights [S2]</a>.</p>
       </div>
       <div class="scorecard">
@@ -191,7 +191,7 @@
       <div class="grid">
         <div>
           <h3>What ships</h3>
-          <p>The measured full model has 74.8M parameters and occupies 285.8 MiB in the local cache. Its image encoder accounts for 11.4M parameters, or about 43.5 MiB in FP32. Precomputing one 512-dimensional text embedding per game label removes the need to ship the text encoder. <a class="source" href="benchmark-results.json">Measured breakdown [D1]</a></p>
+          <p>The measured full model has 74.8M parameters and occupies 285.8 MiB in the local cache. Its image encoder accounts for 11.4M parameters, or about 43.5 MiB in FP32. <strong>Implementation inference from D1:</strong> precomputing one 512-dimensional text embedding per game label removes the need to ship the text encoder. <a class="source" href="benchmark-results.json">Measured breakdown [D1]</a></p>
           <div class="chips"><span class="chip">11.4M vision parameters</span><span class="chip">43.5 MiB FP32</span><span class="chip">512-D label vectors</span></div>
         </div>
         <div>

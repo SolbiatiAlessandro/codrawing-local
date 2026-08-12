@@ -14,6 +14,13 @@ dependencies = [
   "claude-agent-sdk>=0.2",
 ]
 
+[project.optional-dependencies]
+mobileclip = [
+  "torch>=2",
+  "open-clip-torch>=3.3",
+  "pillow",
+]
+
 [project.scripts]
 codrawing-run = "codrawing.cli:main"
 

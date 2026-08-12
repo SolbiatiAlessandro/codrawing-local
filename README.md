@@ -86,6 +86,14 @@ live state and `/replay` for saved replays (see `docs/global-protocol.md`).
 - The classifier is a shared noisy sensor. Agents see the target score, its
   delta, and the top predictions after every turn, and must infer the
   scorer's behavior from score changes.
+- Two scorers are available. The default is the bundled Quick, Draw!
+  nearest-prototype model (10 fixed classes, threshold 0.95). Pass
+  `--scorer mobileclip` for apple/MobileCLIP2-S0 zero-shot: any target
+  string works (open vocabulary), thresholds are calibrated against real
+  human sketches where measured (draw at least as well as the median
+  human; light bulb 0.547), and inference auto-selects GPU (CUDA/MPS).
+  Needs `uv pip install -e ".[mobileclip]"`; weights (~150 MB) download
+  from Hugging Face on first use.
 - The recorded team score is the best score ever reached in the episode.
 
 The wire protocol for writing your own player is in

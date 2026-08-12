@@ -45,6 +45,7 @@ async def run(
     model: str,
     port: int,
     policy: str | None,
+    scorer: str = "quickdraw",
 ) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = REPO_ROOT / "runs" / f"agent-{target.replace(' ', '-')}-{stamp}"
@@ -65,7 +66,9 @@ async def run(
         "player_connect_timeout_seconds": 60,
         "action_timeout_seconds": 300,
         "model": model,
-        "environment": f"{target} · {turns} turns",
+        "scorer": scorer,
+        "environment": f"{target} · {turns} turns"
+        + (f" · {scorer}" if scorer != "quickdraw" else ""),
     }
     if turns_per_round:
         config["turns_per_round"] = turns_per_round
@@ -81,6 +84,7 @@ async def run(
         "CODRAWING_QUICKDRAW_MODEL": str(
             REPO_ROOT / "codrawing" / "game" / "models" / "quickdraw_prototypes.json"
         ),
+        "CODRAWING_SCORER": scorer,
     }
     server_log = open(run_dir / "server.log", "w")
     server = await asyncio.create_subprocess_exec(
@@ -165,6 +169,13 @@ def main() -> None:
     parser.add_argument("--policy", default=None, help="inline policy prompt shared by all seats")
     parser.add_argument("--policy-file", default=None, help="path to a policy prompt file shared by all seats")
     parser.add_argument("--port", type=int, default=8331)
+    parser.add_argument(
+        "--scorer",
+        choices=["quickdraw", "mobileclip"],
+        default="quickdraw",
+        help="canvas grader: quickdraw prototypes (default) or MobileCLIP2-S0 zero-shot "
+        "(open vocabulary; needs the mobileclip extra installed)",
+    )
     args = parser.parse_args()
 
     if args.policy and args.policy_file:
@@ -179,7 +190,9 @@ def main() -> None:
         turns_per_round = turns_per_round or 10
         turns = args.rounds * turns_per_round
 
-    asyncio.run(run(args.seats, turns, turns_per_round, args.target, args.model, args.port, policy))
+    asyncio.run(
+        run(args.seats, turns, turns_per_round, args.target, args.model, args.port, policy, args.scorer)
+    )
 
 
 if __name__ == "__main__":

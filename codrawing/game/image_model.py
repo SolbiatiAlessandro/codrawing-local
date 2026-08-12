@@ -10,6 +10,7 @@ from typing import Any
 MODEL_NAME = "squeezenet1_1_imagenet1k_v1"
 QUICKDRAW_MODEL_NAME = "quickdraw_nearest_prototype_v1"
 QUICKDRAW_MODEL_PATH = Path(__file__).parent / "models" / "quickdraw_prototypes.json"
+MOBILECLIP_MODEL_NAME = "mobileclip2_s0_zeroshot_v1"
 PASS_THRESHOLD = 0.5
 
 # ILSVRC-2012 indices in TorchVision's canonical category order. A group score
@@ -203,6 +204,116 @@ class QuickDrawScorer:
         }
 
 
+class MobileClipScorer:
+    """Open-vocabulary zero-shot scorer: apple/MobileCLIP2-S0 via open_clip.
+
+    Any target string works — the target is scored against a distractor label
+    set with the prompt "a drawing of a <label>". Pass thresholds are the
+    median score of 500 real human Quick, Draw! sketches where measured
+    (draw at least as well as the median human), else DEFAULT_THRESHOLD.
+    Weights (~150 MB) download from Hugging Face on first use. Requires the
+    `mobileclip` extra: `uv pip install -e ".[mobileclip]"`.
+    """
+
+    PROMPT_TEMPLATE = "a drawing of a {}"
+    DEFAULT_LABELS = (
+        "light bulb", "hot air balloon", "candle", "flashlight", "lollipop",
+        "pear", "sun", "wine glass", "clock", "snowman",
+    )
+    # Median MobileCLIP2 score of 500 real human sketches (measured 2026-08-11).
+    HUMAN_MEDIANS = {"light bulb": 0.547, "candle": 0.964, "pear": 0.999, "sun": 0.987}
+    DEFAULT_THRESHOLD = 0.9
+    UPSCALE = 384
+
+    def __init__(self, model_name: str = "MobileCLIP2-S0", pretrained: str = "dfndr2b") -> None:
+        import open_clip
+        import torch
+
+        self.torch = torch
+        device = os.environ.get("CODRAWING_MOBILECLIP_DEVICE")
+        if device is None:
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
+        self.device = device
+        self.model, _, self.preprocess = open_clip.create_model_and_transforms(
+            model_name, pretrained=pretrained
+        )
+        self.model.eval()
+        self.model.to(device)
+        self.tokenizer = open_clip.get_tokenizer(model_name)
+        self._text_features: dict[tuple[str, ...], Any] = {}
+
+    def _labels_for(self, target: str) -> tuple[str, ...]:
+        labels = tuple(self.DEFAULT_LABELS)
+        return labels if target in labels else labels + (target,)
+
+    def _encode_labels(self, labels: tuple[str, ...]) -> Any:
+        if labels not in self._text_features:
+            text = self.tokenizer([self.PROMPT_TEMPLATE.format(label) for label in labels])
+            with self.torch.no_grad():
+                features = self.model.encode_text(text.to(self.device))
+                features /= features.norm(dim=-1, keepdim=True)
+            self._text_features[labels] = features
+        return self._text_features[labels]
+
+    def score(
+        self,
+        *,
+        canvas: list[str],
+        width: int,
+        height: int,
+        target: str,
+        turn: int,
+        previous_score: float | None,
+    ) -> dict[str, Any]:
+        from PIL import Image
+
+        if len(canvas) != width * height:
+            raise ValueError("canvas length does not match its dimensions")
+        labels = self._labels_for(target)
+        text_features = self._encode_labels(labels)
+
+        pixels = [tuple(bytes.fromhex(color.removeprefix("#"))) for color in canvas]
+        image = Image.new("RGB", (width, height))
+        image.putdata(pixels)
+        # Nearest upscale keeps pixel-art edges crisp for the CLIP preprocessor.
+        image = image.resize((self.UPSCALE, self.UPSCALE), Image.Resampling.NEAREST)
+        batch = self.preprocess(image).unsqueeze(0).to(self.device)
+        with self.torch.no_grad():
+            image_features = self.model.encode_image(batch)
+            image_features /= image_features.norm(dim=-1, keepdim=True)
+            probabilities = (
+                (100.0 * image_features @ text_features.T).softmax(dim=-1)[0].cpu().tolist()
+            )
+
+        ordered = sorted(zip(labels, probabilities), key=lambda item: item[1], reverse=True)
+        target_score = probabilities[labels.index(target)]
+        threshold = self.HUMAN_MEDIANS.get(target, self.DEFAULT_THRESHOLD)
+        delta = 0.0 if previous_score is None else target_score - previous_score
+
+        return {
+            "model": MOBILECLIP_MODEL_NAME,
+            "turn": turn,
+            "target_score": target_score,
+            "score_delta": delta,
+            "pass_threshold": threshold,
+            "passing": target_score > threshold,
+            "target_rank": next(
+                index for index, item in enumerate(ordered, 1) if item[0] == target
+            ),
+            "label_count": len(labels),
+            "best_target_label": target,
+            "top_predictions": [
+                {"label": label, "probability": probability}
+                for label, probability in ordered[:5]
+            ],
+        }
+
+
 class TargetScorerRouter:
     """Route each target to the classifier that knows it.
 
@@ -216,13 +327,17 @@ class TargetScorerRouter:
         imagenet_model_path: Path | None,
         imagenet_labels_path: Path | None,
         quickdraw_model_path: Path = QUICKDRAW_MODEL_PATH,
+        use_mobileclip: bool = False,
     ) -> None:
         self._imagenet_model_path = imagenet_model_path
         self._imagenet_labels_path = imagenet_labels_path
         self._imagenet: ImageModelScorer | None = None
         self.quickdraw = QuickDrawScorer(quickdraw_model_path)
+        self.mobileclip = MobileClipScorer() if use_mobileclip else None
 
     def score(self, *, target: str, **kwargs: Any) -> dict[str, Any]:
+        if self.mobileclip is not None:
+            return self.mobileclip.score(target=target, **kwargs)
         if target in TARGET_INDICES:
             if self._imagenet is None:
                 if self._imagenet_model_path is None or self._imagenet_labels_path is None:
@@ -241,7 +356,8 @@ class TargetScorerRouter:
 def scorer_from_environment() -> TargetScorerRouter | None:
     model_path = os.environ.get("CODRAWING_IMAGE_MODEL")
     quickdraw_override = os.environ.get("CODRAWING_QUICKDRAW_MODEL")
-    if not model_path and not quickdraw_override:
+    scorer_name = os.environ.get("CODRAWING_SCORER", "").lower()
+    if not model_path and not quickdraw_override and scorer_name != "mobileclip":
         return None
     labels_path = os.environ.get("CODRAWING_IMAGE_MODEL_LABELS")
     if model_path and not labels_path:
@@ -251,4 +367,5 @@ def scorer_from_environment() -> TargetScorerRouter | None:
         Path(model_path) if model_path else None,
         Path(labels_path) if labels_path else None,
         quickdraw_path,
+        use_mobileclip=scorer_name == "mobileclip",
     )
