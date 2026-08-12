@@ -48,7 +48,8 @@ async def run(
     scorer: str = "quickdraw",
 ) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_dir = REPO_ROOT / "runs" / f"agent-{target.replace(' ', '-')}-{stamp}"
+    # Parallel launches can share a second; a short suffix keeps dirs unique.
+    run_dir = REPO_ROOT / "runs" / f"agent-{target.replace(' ', '-')}-{stamp}-{secrets.token_hex(2)}"
     run_dir.mkdir(parents=True)
     policy_path: Path | None = None
     if policy is not None:
