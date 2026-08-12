@@ -172,10 +172,11 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8331)
     parser.add_argument(
         "--scorer",
-        choices=["quickdraw", "mobileclip"],
+        choices=["quickdraw", "mobileclip", "judge"],
         default="quickdraw",
-        help="canvas grader: quickdraw prototypes (default) or MobileCLIP2-S0 zero-shot "
-        "(open vocabulary; needs the mobileclip extra installed)",
+        help="canvas grader: quickdraw prototypes (default), MobileCLIP2-S0 zero-shot "
+        "(open vocabulary; needs the mobileclip extra), or judge (a vision LLM scores "
+        "the canvas 0-100 with a rubric that rewards correct scene context)",
     )
     args = parser.parse_args()
 

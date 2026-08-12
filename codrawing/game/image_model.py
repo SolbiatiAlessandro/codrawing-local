@@ -314,6 +314,105 @@ class MobileClipScorer:
         }
 
 
+JUDGE_MODEL_NAME = "vlm_judge_v1"
+
+
+class VlmJudgeScorer:
+    """Rubric-based judge: a vision LLM scores how much the canvas looks like
+    the target, rewarding correct context (a traffic light on a street scores
+    above a bare traffic light). Score is monotonic in scene completeness
+    instead of saturating at class membership, which also blunts sparse-pixel
+    hacks. Uses the local `claude` CLI on subscription auth; one call per turn.
+    """
+
+    PASS_THRESHOLD = 0.85
+    RUBRIC = (
+        "Read the image at {path}. It is a {width}x{height} pixel drawing. "
+        "Judge how much it looks like a {target}, 0-100: 0 = nothing recognizable, "
+        "40 = the class is guessable but crude, 70 = clearly a {target}, "
+        "90+ = a {target} drawn well in a coherent scene with correct context. "
+        "Written words in the image do not count as drawing. "
+        'Reply with ONLY JSON: {{"score": <int>, "looks_like": ["<top guess>", "<second>", "<third>"]}}'
+    )
+
+    def __init__(self, model: str | None = None) -> None:
+        self.model = model or os.environ.get("CODRAWING_JUDGE_MODEL", "claude-haiku-4-5-20251001")
+        # Single judgments vary a lot on the same canvas; a small median tames it.
+        self.samples = max(1, int(os.environ.get("CODRAWING_JUDGE_SAMPLES", "3")))
+
+    def score(
+        self,
+        *,
+        canvas: list[str],
+        width: int,
+        height: int,
+        target: str,
+        turn: int,
+        previous_score: float | None,
+    ) -> dict[str, Any]:
+        import subprocess
+        import tempfile
+
+        from PIL import Image
+
+        if len(canvas) != width * height:
+            raise ValueError("canvas length does not match its dimensions")
+        pixels = [tuple(bytes.fromhex(color.removeprefix("#"))) for color in canvas]
+        image = Image.new("RGB", (width, height))
+        image.putdata(pixels)
+        image = image.resize((width * 16, height * 16), Image.Resampling.NEAREST)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
+            image.save(handle.name)
+            path = handle.name
+        prompt = self.RUBRIC.format(path=path, width=width, height=height, target=target)
+
+        def one_judgment() -> dict[str, Any]:
+            completed = subprocess.run(
+                ["claude", "-p", prompt, "--model", self.model, "--allowedTools", "Read"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            raw = completed.stdout.strip()
+            start, end = raw.find("{"), raw.rfind("}")
+            return json.loads(raw[start : end + 1])
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=self.samples) as pool:
+            futures = [pool.submit(one_judgment) for _ in range(self.samples)]
+            payloads = []
+            for future in futures:
+                try:
+                    payloads.append(future.result())
+                except Exception:
+                    pass
+        os.unlink(path)
+        if not payloads:
+            raise RuntimeError("judge produced no valid judgments")
+        scores = sorted(int(p["score"]) for p in payloads)
+        median = scores[len(scores) // 2]
+        target_score = max(0.0, min(1.0, median / 100.0))
+        guesses = [str(g) for g in payloads[0].get("looks_like", [])][:3]
+        delta = 0.0 if previous_score is None else target_score - previous_score
+
+        return {
+            "model": JUDGE_MODEL_NAME,
+            "turn": turn,
+            "target_score": target_score,
+            "score_delta": delta,
+            "pass_threshold": self.PASS_THRESHOLD,
+            "passing": target_score > self.PASS_THRESHOLD,
+            "target_rank": 1 if guesses and guesses[0].lower() == target.lower() else 2,
+            "label_count": 0,
+            "best_target_label": target,
+            "top_predictions": [
+                {"label": guess, "probability": target_score if index == 0 else 0.0}
+                for index, guess in enumerate(guesses)
+            ],
+        }
+
+
 class TargetScorerRouter:
     """Route each target to the classifier that knows it.
 
@@ -328,14 +427,18 @@ class TargetScorerRouter:
         imagenet_labels_path: Path | None,
         quickdraw_model_path: Path = QUICKDRAW_MODEL_PATH,
         use_mobileclip: bool = False,
+        use_judge: bool = False,
     ) -> None:
         self._imagenet_model_path = imagenet_model_path
         self._imagenet_labels_path = imagenet_labels_path
         self._imagenet: ImageModelScorer | None = None
         self.quickdraw = QuickDrawScorer(quickdraw_model_path)
         self.mobileclip = MobileClipScorer() if use_mobileclip else None
+        self.judge = VlmJudgeScorer() if use_judge else None
 
     def score(self, *, target: str, **kwargs: Any) -> dict[str, Any]:
+        if self.judge is not None:
+            return self.judge.score(target=target, **kwargs)
         if self.mobileclip is not None:
             return self.mobileclip.score(target=target, **kwargs)
         if target in TARGET_INDICES:
@@ -357,7 +460,7 @@ def scorer_from_environment() -> TargetScorerRouter | None:
     model_path = os.environ.get("CODRAWING_IMAGE_MODEL")
     quickdraw_override = os.environ.get("CODRAWING_QUICKDRAW_MODEL")
     scorer_name = os.environ.get("CODRAWING_SCORER", "").lower()
-    if not model_path and not quickdraw_override and scorer_name != "mobileclip":
+    if not model_path and not quickdraw_override and scorer_name not in ("mobileclip", "judge"):
         return None
     labels_path = os.environ.get("CODRAWING_IMAGE_MODEL_LABELS")
     if model_path and not labels_path:
@@ -368,4 +471,5 @@ def scorer_from_environment() -> TargetScorerRouter | None:
         Path(labels_path) if labels_path else None,
         quickdraw_path,
         use_mobileclip=scorer_name == "mobileclip",
+        use_judge=scorer_name == "judge",
     )
