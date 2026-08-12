@@ -154,7 +154,15 @@ class GameRuntime:
     def score_canvas(self) -> None:
         if self.image_model is None:
             return
-        self.image_model_feedback = self._score_canvas()
+        try:
+            self.image_model_feedback = self._score_canvas()
+        except Exception as error:
+            # A scorer failure must not kill the episode; keep the previous
+            # feedback so agents see a stalled score instead of a dead game.
+            print(f"scorer failed on turn {self.engine.turn if self.engine else '?'}: {error!r}", flush=True)
+            if self.image_model_feedback is None:
+                return
+            self.image_model_feedback = {**self.image_model_feedback, "score_delta": 0.0}
         self.image_model_score_trace.append(self.image_model_feedback)
 
     def snapshot(self, *, turn_messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:

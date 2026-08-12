@@ -389,7 +389,21 @@ class VlmJudgeScorer:
                     pass
         os.unlink(path)
         if not payloads:
-            raise RuntimeError("judge produced no valid judgments")
+            # Judge outage must never kill the game loop: repeat the previous
+            # score with zero delta and let the next turn retry.
+            carried = previous_score if previous_score is not None else 0.0
+            return {
+                "model": JUDGE_MODEL_NAME,
+                "turn": turn,
+                "target_score": carried,
+                "score_delta": 0.0,
+                "pass_threshold": self.PASS_THRESHOLD,
+                "passing": carried > self.PASS_THRESHOLD,
+                "target_rank": 2,
+                "label_count": 0,
+                "best_target_label": target,
+                "top_predictions": [{"label": "(judge unavailable this turn)", "probability": carried}],
+            }
         scores = sorted(int(p["score"]) for p in payloads)
         median = scores[len(scores) // 2]
         target_score = max(0.0, min(1.0, median / 100.0))
