@@ -77,6 +77,20 @@ canvas is 64x32), `--scorer` (default `both`), `--model`, `--policy` /
 `runs/versus-<left>-vs-<right>-<timestamp>/` with the same report page,
 showing one score line per team and a winner.
 
+A versus run has two pages. `report.html` is the analysis view (charts,
+token and time series, full agent traces, interviews). The match view is the
+live viewer, which lays the episode out as a game: one squad facing each
+half, a scoreboard over the half it scores, tinted territories, and a
+scrubbable timeline.
+
+```bash
+.venv/bin/python scripts/render_versus_page.py runs/versus-<slug>
+```
+
+writes `game.html` next to it — the same viewer with the episode embedded,
+so it needs no server and makes no network requests (and can be published
+as an artifact).
+
 Single-call CLI seats (faster, cheaper, alternates `codex` and `claude`):
 
 ```bash

@@ -32,7 +32,7 @@
     #feedback .fail { color: var(--bad); font-weight: 700; }
 
     /* Two squads facing each other across the canvas. */
-    .arena { display: grid; grid-template-columns: 250px minmax(0, 1fr) 250px; gap: 14px; min-height: 0; }
+    .arena { display: grid; grid-template-columns: 186px minmax(0, 1fr) 186px; gap: 12px; min-height: 0; }
     .arena.solo { grid-template-columns: minmax(0, 1fr) 340px; }
     .arena.solo .squad.right { display: none; }
 
@@ -54,8 +54,9 @@
     .robotrow svg { width: 48px; height: 48px; display: block; margin: 0 auto; }
     .bubble {
       position: relative; background: var(--card); border: 1.5px solid var(--ink);
-      border-radius: 10px; padding: 5px 8px; font-size: 10.5px; line-height: 1.4;
-      max-height: 100%; overflow-y: auto; min-height: 0;
+      border-radius: 10px; padding: 6px 9px; font-size: 11px; line-height: 1.45;
+      max-height: 132px; overflow-y: auto; min-height: 0;
+      scrollbar-width: thin;
     }
     .bubble::before {
       content: ""; position: absolute; left: -7px; top: 18px; width: 11px; height: 11px;
@@ -69,39 +70,64 @@
     }
     .bubble.quiet { border-color: var(--line); color: #A8A193; }
     .bubble.quiet::before { border-color: var(--line); }
+    /* Said on an earlier turn: still the agent's current position, just older. */
+    .bubble.stale { border-color: var(--line); opacity: 0.6; }
+    .bubble.stale::before { border-color: var(--line); }
     .bubble .say { display: block; }
     .seat { font-weight: 700; letter-spacing: 0.06em; }
+    .when { color: var(--muted); font-weight: 400; }
 
-    .stage { display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+    /* The board is the hero: everything else is sized so the canvas stays the
+       biggest thing on screen, and the table centres in the row. */
+    .stage { display: flex; flex-direction: column; min-height: 0; justify-content: center; gap: 0; }
+    .table { margin: 0 auto; max-width: 100%; display: flex; flex-direction: column; }
+
     /* Two scoreboards, each sitting over the half it scores. */
-    .teamheads { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 0 auto; width: 100%; }
+    .teamheads { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
     .teamhead {
-      background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--tint, var(--line));
-      border-radius: 6px 6px 0 0; padding: 7px 12px 6px;
-      display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0;
+      --team: var(--line);
+      background: var(--card); border: 1px solid var(--line);
+      border-top: 4px solid var(--team); border-radius: 8px 8px 0 0;
+      padding: 9px 14px 8px; display: grid; gap: 2px 10px; min-width: 0;
+      grid-template-columns: 1fr auto; align-items: baseline;
     }
-    .teamhead .who { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
-    .teamhead .what { font-size: 12.5px; color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .teamhead .score { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .teamhead .delta { font-size: 11.5px; font-variant-numeric: tabular-nums; }
-    .teamhead .lead {
-      font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; color: var(--good);
-      border: 1px solid var(--good); border-radius: 999px; padding: 1px 7px;
+    .teamhead.right { text-align: right; grid-template-columns: auto 1fr; }
+    .teamhead.right .id { order: 2; justify-self: end; }
+    .teamhead.right .score { order: 1; justify-self: start; }
+    .teamhead.right .parts { order: 3; }
+    .id { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+    .teamhead.right .id { flex-direction: row-reverse; }
+    .id .who { font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--team); }
+    .id .what { font-size: 13px; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .id .lead {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--card); background: var(--good); border-radius: 999px; padding: 2px 8px; flex: none;
     }
-    .teamhead .parts { font-size: 10.5px; color: var(--muted); width: 100%; font-variant-numeric: tabular-nums; }
+    .score { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; color: var(--team); }
+    .score .delta { font-size: 12px; font-weight: 700; margin-left: 5px; }
+    .parts { grid-column: 1 / -1; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    /* Tug of war: the gap between the two scores, at a glance. */
+    .leadbar { display: flex; height: 6px; background: var(--grid); overflow: hidden; }
+    .leadbar i { display: block; transition: width 0.25s ease; }
+
     .boardpane {
-      flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--card);
-      border: 1px solid var(--line); border-radius: 0 0 8px 8px; padding: 8px 12px 10px;
+      display: flex; flex-direction: column; min-height: 0; background: var(--card);
+      border: 1px solid var(--line); border-top: none; border-radius: 0 0 8px 8px;
+      padding: 10px 12px 10px; box-shadow: 0 1px 3px rgba(38, 34, 26, 0.06);
     }
-    .boardbox { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-    /* Canvas, last action, and score line move as one block. */
-    .boardstack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    canvas#board { display: block; }
+    .boardbox { flex: none; display: flex; align-items: center; justify-content: center; }
+    canvas#board { display: block; border: 1px solid var(--line); }
     #lastaction {
       font-size: 11px; color: var(--muted); border-top: 1px solid var(--grid);
-      padding-top: 5px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      padding-top: 6px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    #spark { width: 100%; height: 46px; display: block; }
+    .chart { flex: none; height: 112px; display: flex; flex-direction: column; margin-top: 6px; }
+    .chartname {
+      font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+      display: flex; justify-content: space-between;
+    }
+    #spark { width: 100%; flex: 1; min-height: 50px; display: block; }
 
     .controls { display: flex; gap: 10px; align-items: center; }
     .controls button {
@@ -145,16 +171,18 @@
     </section>
 
     <section class="stage">
-      <div class="teamheads" id="teamheads" hidden></div>
-      <section class="boardpane">
-        <div class="boardbox">
-          <div class="boardstack">
-            <canvas id="board"></canvas>
-            <div id="lastaction">&mdash;</div>
+      <div class="table" id="table">
+        <div class="teamheads" id="teamheads" hidden></div>
+        <div class="leadbar" id="leadbar" hidden><i id="leadA"></i><i id="leadB"></i></div>
+        <section class="boardpane">
+          <div class="boardbox"><canvas id="board"></canvas></div>
+          <div id="lastaction">&mdash;</div>
+          <div class="chart">
+            <div class="chartname"><span>Score by turn</span><span id="charthint"></span></div>
             <canvas id="spark"></canvas>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </section>
 
     <section class="squad right" id="squad-right">
@@ -238,78 +266,120 @@
     document.querySelector('#teamheads').hidden = !next.versus;
   }
 
-  function renderBubbles(frame) {
-    const messageBySlot = {};
-    for (const m of frame.messages || []) {
-      messageBySlot[m.slot] = (messageBySlot[m.slot] ? messageBySlot[m.slot] + ' ' : '') + m.text;
+  // What each agent said most recently at this point in the episode. A team
+  // can go quiet for several turns, and eight empty bubbles say nothing about
+  // the match; the last thing an agent said is still its stated position.
+  const liveSaid = {};
+  function latestSaid(index) {
+    if (!frames.length || index === undefined) return liveSaid;
+    const said = {};
+    for (let i = 0; i <= index; i++) {
+      for (const m of frames[i].messages || []) {
+        said[m.slot] = { text: m.text, turn: frames[i].turn };
+      }
     }
+    return said;
+  }
+
+  function renderBubbles(frame, index) {
+    const said = latestSaid(index);
     for (const slot of [...seatLayout.left, ...seatLayout.right]) {
       const bubble = document.querySelector('#bubble-' + slot);
       if (!bubble) continue;
-      const text = messageBySlot[slot];
+      const entry = said[slot];
+      const fresh = entry && entry.turn === frame.turn;
       const label = '<span class="seat" style="color:' + SEAT_COLORS[slot % SEAT_COLORS.length] +
-        '">A' + slot + '</span> ';
-      if (text) {
-        bubble.classList.remove('quiet');
-        bubble.innerHTML = '<span class="say">' + label + esc(text) + '</span>';
-      } else {
-        bubble.classList.add('quiet');
-        bubble.innerHTML = '<span class="say">' + label + '(silent this turn)</span>';
-      }
+        '">A' + slot + '</span> ' +
+        (entry && !fresh ? '<span class="when">T' + entry.turn + '</span> ' : '');
+      bubble.classList.toggle('quiet', !entry);
+      bubble.classList.toggle('stale', Boolean(entry) && !fresh);
+      bubble.innerHTML = '<span class="say">' + label +
+        (entry ? esc(entry.text) : 'has not spoken yet') + '</span>';
+      if (fresh) bubble.scrollTop = 0;
     }
   }
 
-  // Each team's scoreboard sits directly over the half it is scored on.
+  function regionPixelCount(frame, box) {
+    let count = 0;
+    frame.canvas.forEach((color, i) => {
+      const x = i % frame.width, y = Math.floor(i / frame.width);
+      if (color !== WHITE && x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height) count++;
+    });
+    return count;
+  }
+
+  // Each team's scoreboard sits directly over the half it is scored on, and
+  // the bar under them shows the gap as a tug of war.
   function renderTeamHeads(frame) {
     const feedback = frame.team_feedback || [];
     const teams = frame.teams || [];
     if (!seatLayout.versus || !teams.length) return;
-    const best = Math.max(...feedback.map(f => (f && f.target_score) || 0));
-    const pixels = teams.map(team => {
-      const box = team.region;
-      let count = 0;
-      frame.canvas.forEach((color, i) => {
-        const x = i % frame.width, y = Math.floor(i / frame.width);
-        if (color !== WHITE && x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height) count++;
-      });
-      return count;
-    });
+    const scores = teams.map((_, k) => (feedback[k] || {}).target_score || 0);
+    const best = Math.max(...scores);
     document.querySelector('#teamheads').innerHTML = teams.map((team, k) => {
       const f = feedback[k] || {};
-      const score = f.target_score || 0;
       const delta = f.score_delta || 0;
       const parts = f.components
-        ? Object.entries(f.components).map(([n, v]) => n + ' ' + (100 * v).toFixed(0) + '%').join(' &middot; ')
+        ? Object.entries(f.components).map(([n, v]) => n + ' ' + (100 * v).toFixed(0)).join(' / ')
         : '';
-      return '<div class="teamhead" style="--tint:' + TEAM_COLORS[k] + ';border-top-color:' + TEAM_COLORS[k] + '">' +
-        '<span class="who" style="color:' + TEAM_COLORS[k] + '">' + esc(team.name) + '</span>' +
+      const identity = '<span class="id">' +
+        '<span class="who">' + esc(team.name) + '</span>' +
         '<span class="what">' + esc(team.target) + '</span>' +
-        (score === best && best > 0 ? '<span class="lead">leading</span>' : '') +
-        '<span class="score">' + (100 * score).toFixed(0) + '%</span>' +
+        (scores[k] === best && best > 0 ? '<span class="lead">leading</span>' : '') +
+        '</span>';
+      const score = '<span class="score">' + (100 * scores[k]).toFixed(0) + '%' +
         '<span class="delta" style="color:' + (delta >= 0 ? 'var(--good)' : 'var(--bad)') + '">' +
-        (delta >= 0 ? '+' : '') + (100 * delta).toFixed(0) + '</span>' +
-        '<span class="parts">' + pixels[k] + ' pixels' + (parts ? ' &middot; ' + parts : '') + '</span>' +
-        '</div>';
+        (delta >= 0 ? '+' : '') + (100 * delta).toFixed(0) + '</span></span>';
+      return '<div class="teamhead' + (k ? ' right' : '') + '" style="--team:' + TEAM_COLORS[k] + '">' +
+        identity + score +
+        '<span class="parts">' + regionPixelCount(frame, team.region) + ' pixels' +
+        (parts ? ' &middot; judge/clip ' + parts : '') + '</span></div>';
     }).join('');
+
+    const total = scores[0] + scores[1];
+    const share = total > 0 ? (scores[0] / total) * 100 : 50;
+    const bar = document.querySelector('#leadbar');
+    bar.hidden = false;
+    document.querySelector('#leadA').style.cssText =
+      'width:' + share + '%;background:' + TEAM_COLORS[0];
+    document.querySelector('#leadB').style.cssText =
+      'width:' + (100 - share) + '%;background:' + TEAM_COLORS[1];
   }
 
   function drawBoard(frame, previous) {
-    const box = document.querySelector('.boardbox');
-    // Fit both axes: a versus canvas is twice as wide as it is tall. The stack
-    // below the canvas (last action + score line) needs about 70px.
+    // Size the board off the whole arena row, not the pane it sits in: the
+    // pane hugs the board, so asking the pane would feed its own size back.
+    const arena = document.querySelector('.arena');
+    const stage = document.querySelector('.stage');
+    const teams = frame.teams || [];
+    // Reserve the scoreboards, the last-action line, the score chart, padding.
+    const reserved = (teams.length ? 88 : 34) + 108;
     const cell = Math.max(
       6,
-      Math.floor(Math.min((box.clientWidth - 8) / frame.width, (box.clientHeight - 78) / frame.height))
+      Math.floor(Math.min(
+        (stage.clientWidth - 30) / frame.width,
+        (arena.clientHeight - reserved) / frame.height
+      ))
     );
     const size = { w: frame.width * cell + 1, h: frame.height * cell + 1 };
     const scale = window.devicePixelRatio || 1;
     board.width = size.w * scale; board.height = size.h * scale;
     board.style.width = size.w + 'px'; board.style.height = size.h + 'px';
     // The scoreboards line up with the halves they score.
-    document.querySelector('#teamheads').style.width = size.w + 'px';
+    document.querySelector('#table').style.width = (size.w + 26) + 'px';
     boardCtx.setTransform(scale, 0, 0, scale, 0, 0);
     boardCtx.fillStyle = '#FFFFFF';
     boardCtx.fillRect(0, 0, size.w, size.h);
+    // Each half is a territory: a wash of its team's color under the grid.
+    if (teams.length === 2) {
+      teams.forEach((team, k) => {
+        boardCtx.fillStyle = TEAM_COLORS[k];
+        boardCtx.globalAlpha = 0.06;
+        boardCtx.fillRect(team.region.x * cell, team.region.y * cell,
+                          team.region.width * cell, team.region.height * cell);
+        boardCtx.globalAlpha = 1;
+      });
+    }
     boardCtx.strokeStyle = '#E9E3D6';
     boardCtx.lineWidth = 1;
     for (let x = 0; x <= frame.width; x++) {
@@ -338,12 +408,11 @@
       if (previous && previous.canvas[i] !== color) changed.push(i);
     }
     // Seam between the two independently scored halves.
-    const teams = frame.teams || [];
     if (teams.length === 2) {
       const seam = teams[1].region.x * cell + 0.5;
-      boardCtx.strokeStyle = '#7A7466';
+      boardCtx.strokeStyle = '#26221A';
       boardCtx.lineWidth = 2;
-      boardCtx.setLineDash([6, 4]);
+      boardCtx.setLineDash([7, 5]);
       boardCtx.beginPath(); boardCtx.moveTo(seam, 0); boardCtx.lineTo(seam, size.h); boardCtx.stroke();
       boardCtx.setLineDash([]);
     }
@@ -364,48 +433,72 @@
         (inside ? ' in ' + inside : '');
     });
     document.querySelector('#lastaction').textContent =
-      acts.length ? acts.join(' · ') : 'no accepted writes this turn';
+      acts.length ? acts.join(' \u00b7 ') : 'no accepted writes this turn';
   }
 
   function drawSpark(series, threshold, currentIndex, turnsPerRound, colors) {
     const scale = window.devicePixelRatio || 1;
-    const w = spark.clientWidth || 500, h = 46;
+    // The chart takes whatever height the board leaves; read it, don't set it.
+    const w = spark.clientWidth || 500, h = Math.max(46, spark.clientHeight || 46);
     spark.width = w * scale; spark.height = h * scale;
-    spark.style.height = h + 'px';
     const ctx = spark.getContext('2d');
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const pad = { l: 4, r: 46, t: 8, b: 6 };
+    const pad = { l: 4, r: 48, t: 10, b: 8 };
     const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
     const length = Math.max(...series.map(s => s.length), 1);
     const max = Math.max(0.05, ...series.flat());
     const x = i => pad.l + (length > 1 ? (i / (length - 1)) * plotW : plotW / 2);
     const y = v => pad.t + plotH - (v / max) * plotH;
     ctx.font = '10px ui-monospace, Menlo, monospace';
-    if (turnsPerRound && turnsPerRound < length - 1) {
-      ctx.strokeStyle = '#EFE9DC';
-      for (let t = turnsPerRound; t < length - 1; t += turnsPerRound) {
-        ctx.beginPath(); ctx.moveTo(x(t), pad.t); ctx.lineTo(x(t), pad.t + plotH); ctx.stroke();
-      }
+    // A turn grid every 5 turns, so swings can be read against the clock.
+    ctx.strokeStyle = '#EFE9DC';
+    ctx.lineWidth = 1;
+    const step = turnsPerRound && turnsPerRound < length - 1 ? turnsPerRound : 5;
+    for (let t = step; t < length; t += step) {
+      ctx.beginPath(); ctx.moveTo(x(t), pad.t); ctx.lineTo(x(t), pad.t + plotH); ctx.stroke();
     }
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t + plotH + 0.5); ctx.lineTo(w - pad.r, pad.t + plotH + 0.5); ctx.stroke();
     if (threshold && threshold <= max) {
       ctx.strokeStyle = '#B0A896';
       ctx.setLineDash([4, 4]);
       ctx.beginPath(); ctx.moveTo(pad.l, y(threshold)); ctx.lineTo(w - pad.r, y(threshold)); ctx.stroke();
       ctx.setLineDash([]);
     }
+    const labels = [];
     series.forEach((scores, k) => {
       if (!scores.length) return;
       const color = (colors && colors[k]) || '#B45309';
+      const upto = Math.min(currentIndex === undefined ? scores.length - 1 : currentIndex, scores.length - 1);
+      // Area under the line, so the lead reads as territory rather than a squiggle.
+      ctx.beginPath();
+      ctx.moveTo(x(0), pad.t + plotH);
+      scores.forEach((v, i) => ctx.lineTo(x(i), y(v)));
+      ctx.lineTo(x(scores.length - 1), pad.t + plotH);
+      ctx.closePath();
+      ctx.globalAlpha = 0.11;
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       scores.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
       ctx.stroke();
-      const i = Math.min(currentIndex === undefined ? scores.length - 1 : currentIndex, scores.length - 1);
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(x(i), y(scores[i]), 3, 0, 2 * Math.PI); ctx.fill();
-      ctx.fillText((100 * scores[i]).toFixed(1) + '%', w - pad.r + 5, y(scores[i]) + 3);
+      ctx.beginPath(); ctx.arc(x(upto), y(scores[upto]), 3.5, 0, 2 * Math.PI); ctx.fill();
+      labels.push({ y: y(scores[upto]), text: (100 * scores[upto]).toFixed(0) + '%', color });
+    });
+    // Two lines that meet would print their labels on top of each other.
+    labels.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labels.length; i++) {
+      if (labels[i].y - labels[i - 1].y < 12) labels[i].y = labels[i - 1].y + 12;
+    }
+    ctx.font = '700 11px ui-monospace, Menlo, monospace';
+    labels.forEach(label => {
+      ctx.fillStyle = label.color;
+      ctx.fillText(label.text, w - pad.r + 6, label.y + 4);
     });
   }
 
@@ -414,10 +507,10 @@
     if (!feedback) { el.textContent = 'Image-model feedback: unavailable'; return; }
     el.innerHTML =
       '<span class="' + (feedback.passing ? 'pass' : 'fail') + '">' + (feedback.passing ? 'PASSING' : 'NOT PASSING') + '</span>' +
-      ' · ' + esc(feedback.model) + ' score <strong>' + (100 * feedback.target_score).toFixed(2) + '%</strong>' +
+      ' \u00b7 ' + esc(feedback.model) + ' score <strong>' + (100 * feedback.target_score).toFixed(2) + '%</strong>' +
       ' (need &gt;' + (100 * feedback.pass_threshold).toFixed(0) + '%)' +
-      ' · Δ ' + (100 * feedback.score_delta).toFixed(3) + '%' +
-      ' · rank ' + feedback.target_rank + (feedback.label_count ? '/' + feedback.label_count : '');
+      ' \u00b7 \u0394 ' + (100 * feedback.score_delta).toFixed(3) + '%' +
+      ' \u00b7 rank ' + feedback.target_rank + (feedback.label_count ? '/' + feedback.label_count : '');
   }
 
   function showFrame(frame, previous, series, scoreIndex) {
@@ -427,16 +520,20 @@
     document.querySelector('#turn').textContent = frame.turn;
     document.querySelector('#max-turns').textContent = frame.max_turns;
     document.querySelector('#roundlabel').textContent =
-      frame.rounds > 1 ? 'Round ' + frame.round + '/' + frame.rounds + ' · ' : '';
+      frame.rounds > 1 ? 'Round ' + frame.round + '/' + frame.rounds + ' \u00b7 ' : '';
     drawBoard(frame, previous);
     if (teams.length) renderTeamHeads(frame);
     else renderFeedback(frame.image_model_feedback);
-    renderBubbles(frame);
+    renderBubbles(frame, scoreIndex);
     // A versus episode has no single pass threshold; the higher final score wins.
     const threshold = teams.length || !frame.image_model_feedback
       ? 0
       : frame.image_model_feedback.pass_threshold;
     drawSpark(series, threshold, scoreIndex, frame.turns_per_round, teams.length ? TEAM_COLORS : null);
+    const hint = document.querySelector('#charthint');
+    if (hint) hint.textContent = teams.length
+      ? teams.map((t, k) => t.name + ' ' + t.target).join('   vs   ')
+      : '';
   }
 
   function replayScores() {
@@ -477,6 +574,7 @@
 
   let previousLiveFrame = null;
   function handleLive(payload) {
+    for (const m of payload.messages || []) liveSaid[m.slot] = { text: m.text, turn: payload.turn };
     const values = payload.team_feedback
       ? payload.team_feedback.map(f => f.target_score || 0)
       : payload.image_model_feedback ? [payload.image_model_feedback.target_score] : [];
@@ -493,9 +591,15 @@
   // Observatory static replay viewers receive the replay URL as ?replay=.
   const replayUri = params.get('replay') || params.get('replay_uri');
   const replayMode = location.pathname.endsWith('/replay');
+  // A standalone page (scripts/render_versus_page.py) carries its episode
+  // inline, so it needs no server and no network at all.
+  const embedded = document.getElementById('replay-data');
 
-  if (replayUri) {
-    status.textContent = 'Fetching replay…';
+  if (embedded) {
+    loadReplay(JSON.parse(embedded.textContent));
+    status.textContent = 'Replay';
+  } else if (replayUri) {
+    status.textContent = 'Fetching replay\u2026';
     fetch(replayUri)
       .then(async response => {
         if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -513,7 +617,7 @@
     const suppliedAddress = params.get('address');
     const defaultAddress = protocol + '//' + location.host + '/' + (replayMode ? 'replay' : 'global');
     const socket = new WebSocket(suppliedAddress || defaultAddress);
-    socket.onopen = () => { status.textContent = replayMode ? 'Loading replay…' : 'Live'; };
+    socket.onopen = () => { status.textContent = replayMode ? 'Loading replay\u2026' : 'Live'; };
     socket.onerror = () => { status.textContent = 'Connection failed'; };
     socket.onmessage = event => {
       const payload = JSON.parse(event.data);
