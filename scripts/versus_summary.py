@@ -26,6 +26,29 @@ def load(run_dir: Path) -> tuple[dict, dict]:
     return replay, results
 
 
+def attempted_pixels(run_dir: Path, seats: int) -> dict[tuple[int, int], tuple[int, int]]:
+    """(turn, slot) -> the pixel that seat submitted, read from its trace."""
+    attempts: dict[tuple[int, int], tuple[int, int]] = {}
+    for slot in range(seats):
+        trace = run_dir / f"trace-{slot}.jsonl"
+        if not trace.exists():
+            continue
+        for line in trace.read_text().splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if record.get("phase") != "turn":
+                continue
+            for event in record.get("events", []):
+                if event.get("type") == "tool_use" and event.get("name", "").endswith("paint_pixel"):
+                    try:
+                        payload = json.loads(event["input"])
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    attempts[(record["turn"], slot)] = (payload["x"], payload["y"])
+    return attempts
+
+
 def summarize(run_dir: Path) -> None:
     replay, results = load(run_dir)
     frames = replay["frames"]
@@ -94,29 +117,6 @@ def summarize(run_dir: Path) -> None:
             where = f"({pixel[0]},{pixel[1]})" if pixel else "(pixel unknown: no trace)"
             print(f"    T{turn} {where} agents {members} [{kind}]")
 
-
-def attempted_pixels(run_dir: Path, seats: int) -> dict[tuple[int, int], tuple[int, int]]:
-    """(turn, slot) -> the pixel that seat submitted, read from its trace."""
-    attempts: dict[tuple[int, int], tuple[int, int]] = {}
-    for slot in range(seats):
-        trace = run_dir / f"trace-{slot}.jsonl"
-        if not trace.exists():
-            continue
-        for line in trace.read_text().splitlines():
-            if not line.strip():
-                continue
-            record = json.loads(line)
-            if record.get("phase") != "turn":
-                continue
-            for event in record.get("events", []):
-                if event.get("type") == "tool_use" and event.get("name", "").endswith("paint_pixel"):
-                    try:
-                        payload = json.loads(event["input"])
-                    except (json.JSONDecodeError, TypeError):
-                        continue
-                    attempts[(record["turn"], slot)] = (payload["x"], payload["y"])
-    return attempts
-
     # Talk: the public channel is the one agents keep ignoring.
     messages = [m for f in frames for m in f.get("messages", [])]
     public = [m for m in messages if m.get("public")]
@@ -152,3 +152,5 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit("usage: versus_summary.py RUN_DIR")
     summarize(Path(sys.argv[1]))
+
+
