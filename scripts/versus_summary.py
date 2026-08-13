@@ -75,14 +75,47 @@ def summarize(run_dir: Path) -> None:
     for turn, owner, x, y, kind in attacks:
         print(f"    T{turn} agent{owner} ({teams[team_of[owner]]['name']}) {kind} ({x},{y})")
 
-    # Collisions: two agents picking the same pixel, both writes dropped.
+    # Collisions: agents picking the same pixel, every write to it dropped.
+    # A frame records only the turn's collided slots, so two separate
+    # same-team collisions look identical to one cross-team collision. The
+    # seat traces carry the coordinates each agent actually submitted, so
+    # group by pixel and only call a collision cross-team when it truly is.
+    attempts = attempted_pixels(run_dir, len(frames[0]["player_names"]))
     collisions = [(f["turn"], f["collision_slots"]) for f in frames if f.get("collision_slots")]
     dropped = sum(len(slots) for _, slots in collisions)
     print(f"\n## Collisions: {dropped} writes dropped over {len(collisions)} turns")
     for turn, slots in collisions:
-        sides = {team_of[s] for s in slots}
-        kind = "cross-team" if len(sides) > 1 else "own team"
-        print(f"    T{turn} agents {slots} ({kind})")
+        groups: dict[tuple[int, int] | None, list[int]] = collections.defaultdict(list)
+        for slot in slots:
+            groups[attempts.get((turn - 1, slot))].append(slot)
+        for pixel, members in groups.items():
+            sides = {team_of[s] for s in members}
+            kind = "cross-team" if len(sides) > 1 else f"{teams[team_of[members[0]]]['name']}"
+            where = f"({pixel[0]},{pixel[1]})" if pixel else "(pixel unknown: no trace)"
+            print(f"    T{turn} {where} agents {members} [{kind}]")
+
+
+def attempted_pixels(run_dir: Path, seats: int) -> dict[tuple[int, int], tuple[int, int]]:
+    """(turn, slot) -> the pixel that seat submitted, read from its trace."""
+    attempts: dict[tuple[int, int], tuple[int, int]] = {}
+    for slot in range(seats):
+        trace = run_dir / f"trace-{slot}.jsonl"
+        if not trace.exists():
+            continue
+        for line in trace.read_text().splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if record.get("phase") != "turn":
+                continue
+            for event in record.get("events", []):
+                if event.get("type") == "tool_use" and event.get("name", "").endswith("paint_pixel"):
+                    try:
+                        payload = json.loads(event["input"])
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    attempts[(record["turn"], slot)] = (payload["x"], payload["y"])
+    return attempts
 
     # Talk: the public channel is the one agents keep ignoring.
     messages = [m for f in frames for m in f.get("messages", [])]
