@@ -53,6 +53,13 @@ def render(run_dir: Path, output_path: Path | None = None) -> Path:
     # The data has to be parsed before the viewer script runs. Plain string
     # replace, not re.sub: the payload is full of backslash escapes.
     body = body.replace("<script>", data_tag + "\n<script>", 1)
+    # A sandboxed page cannot hand its viewer a file, so the PNG export would
+    # be a dead control here: drop the button and its handler, which is the
+    # last statement in the viewer script.
+    body = body.replace('<button id="download">PNG</button>', "")
+    marker = "  // The standalone build drops this button"
+    start = body.index(marker)
+    body = body[:start] + body[body.index("</script>", start) :]
 
     page = f"<title>{title}</title>\n<style>{style}</style>\n{body}"
     output_path.write_text(page)

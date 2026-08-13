@@ -637,7 +637,10 @@
     if (frames.length) showReplayFrame(frameIndex);
     else if (previousLiveFrame) showFrame(previousLiveFrame, null, liveScores);
   });
-  document.querySelector('#download').addEventListener('click', () => {
+  // The standalone build drops this button: a sandboxed page cannot hand the
+  // viewer a file, so the control would be dead.
+  const downloadButton = document.querySelector('#download');
+  if (downloadButton) downloadButton.addEventListener('click', () => {
     const frame = frames.length ? frames[frameIndex] : previousLiveFrame;
     if (!frame) return;
     const cell = 24;
