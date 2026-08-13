@@ -24,6 +24,7 @@ RUNS_DIR = REPO_ROOT / "runs"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render_replay_page  # noqa: E402
+import render_versus_page  # noqa: E402
 
 PAGE = """<!doctype html>
 <html lang="en">
@@ -60,6 +61,17 @@ a.card {
   padding: 14px; color: inherit; text-decoration: none;
 }
 a.card:hover { border-color: var(--muted); }
+/* A cell holds the run card plus, for versus runs, a link to the match view.
+   The card is an anchor, so the second link has to be its sibling. */
+.cell { display: flex; flex-direction: column; }
+.cell > a.card { flex: 1; }
+a.match {
+  align-self: stretch; text-align: center; font-size: 11.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--accent); text-decoration: none;
+  background: var(--card); border: 1px solid var(--line); border-top: none;
+  border-radius: 0 0 6px 6px; margin-top: -1px; padding: 8px;
+}
+a.match:hover { text-decoration: underline; }
 .thumb { width: 100px; height: 100px; background: #FFFFFF; border: 1px solid var(--grid); border-radius: 4px; }
 .info { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12.5px; }
 .info .target { font-size: 15px; font-weight: 700; }
@@ -82,7 +94,7 @@ a.card:hover { border-color: var(--muted); }
 </html>
 """
 
-CARD = """<a class="card" href="/runs/{dirname}/report.html">
+CARD = """<div class="cell"><a class="card" href="/runs/{dirname}/report.html">
   <svg class="thumb" viewBox="0 0 {w} {h}" shape-rendering="crispEdges" aria-hidden="true">{pixels}</svg>
   <span class="info">
     <span class="target">{target}</span>
@@ -91,7 +103,7 @@ CARD = """<a class="card" href="/runs/{dirname}/report.html">
     <span class="meta">{when}</span>
     <span class="meta">{dirname}</span>
   </span>
-</a>"""
+</a>{extra}</div>"""
 
 
 def thumb_pixels(canvas: list[str], width: int) -> str:
@@ -169,6 +181,11 @@ def run_card(run_dir: Path) -> tuple[str, float, str] | None:
         model=f" &middot; {model}" if model else "",
         traces=" &middot; agent traces" if trace_count else "",
         when=when,
+        extra=(
+            f'<a class="match" href="/runs/{run_dir.name}/game.html">watch the match &rarr;</a>'
+            if teams
+            else ""
+        ),
     )
     return environment, mtime, card
 
@@ -201,15 +218,26 @@ class RunsHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        # Render a missing report on demand so old runs get pages too.
-        if self.path.endswith("/report.html"):
+        # Render either page on demand, and re-render it whenever the replay
+        # has moved on: a running episode checkpoints every few turns, so a
+        # page built from an earlier checkpoint is stale, not missing.
+        for name, renderer in (
+            ("/report.html", render_replay_page.render),
+            ("/game.html", render_versus_page.render),
+        ):
+            if not self.path.endswith(name):
+                continue
             target = REPO_ROOT / self.path.lstrip("/")
             replay = target.parent / "replay.json"
-            if not target.exists() and replay.exists():
+            if not replay.exists():
+                break
+            fresh = target.exists() and target.stat().st_mtime >= replay.stat().st_mtime
+            if not fresh:
                 try:
-                    render_replay_page.render(target.parent)
+                    renderer(target.parent)
                 except Exception as error:
                     print(f"could not render {target}: {error!r}", flush=True)
+            break
         super().do_GET()
 
 
