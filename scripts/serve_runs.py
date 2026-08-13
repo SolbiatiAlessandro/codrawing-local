@@ -86,7 +86,7 @@ CARD = """<a class="card" href="/runs/{dirname}/report.html">
   <svg class="thumb" viewBox="0 0 {w} {h}" shape-rendering="crispEdges" aria-hidden="true">{pixels}</svg>
   <span class="info">
     <span class="target">{target}</span>
-    <span class="score"><strong>{score}</strong> best &middot; <span class="{cls}">{verdict}</span></span>
+    <span class="score">{scoreline}</span>
     <span class="meta">{seats} agent{plural} &middot; {turns} turns{model}{traces}</span>
     <span class="meta">{when}</span>
     <span class="meta">{dirname}</span>
@@ -126,10 +126,29 @@ def run_card(run_dir: Path) -> tuple[str, float, str] | None:
     if not width and canvas:
         width = int(math.isqrt(len(canvas)))
     height = len(canvas) // width if width else 0
-    best = results.get("best_target_score")
-    if best is None:
-        best = max(results.get("scores") or [0])
-    passed = bool(results.get("evaluation_passed"))
+    teams = results.get("teams") or []
+    if teams:
+        # Versus run: two final scores and a winner, not one pass/fail score.
+        finals = " vs ".join(
+            f"<strong>{team['name']} {team.get('final_score', 0) * 100:.1f}%</strong>"
+            for team in teams
+        )
+        verdict = (
+            f'<span class="pass">{results.get("winner_name", "?")} wins</span>'
+            if results.get("winner") is not None
+            else '<span class="meta">tie</span>'
+        )
+        scoreline = f"{finals} &middot; {verdict}"
+    else:
+        best = results.get("best_target_score")
+        if best is None:
+            best = max(results.get("scores") or [0])
+        passed = bool(results.get("evaluation_passed"))
+        scoreline = (
+            f"<strong>{best * 100:.1f}%</strong> best &middot; "
+            f'<span class="{"pass" if passed else "fail"}">'
+            f'{"PASS" if passed else "not passing"}</span>'
+        )
     seats = len(results.get("accepted_pixels", []))
     turns = results.get("turns", "?")
     model = config.get("model")
@@ -143,9 +162,7 @@ def run_card(run_dir: Path) -> tuple[str, float, str] | None:
         h=height or 1,
         pixels=thumb_pixels(canvas, width) if width else "",
         target=results.get("target", "?"),
-        score=f"{best * 100:.1f}%",
-        cls="pass" if passed else "fail",
-        verdict="PASS" if passed else "not passing",
+        scoreline=scoreline,
         seats=seats,
         plural="" if seats == 1 else "s",
         turns=turns,
