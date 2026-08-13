@@ -24,6 +24,74 @@ class Action:
     paint: Paint
 
 
+@dataclass(frozen=True)
+class Team:
+    """One side of an adversarial episode: a target and the region scored for it.
+
+    The region is the rectangle cropped out of the shared canvas and handed to
+    the scorer as its own image. It is *not* a painting restriction: any seat
+    may paint any pixel of the canvas, including inside the other team's
+    region, which is what makes sabotage possible.
+    """
+
+    name: str
+    target: str
+    x: int
+    y: int
+    width: int
+    height: int
+    slots: tuple[int, ...]
+
+    @classmethod
+    def from_config(cls, payload: dict[str, Any]) -> "Team":
+        region = payload.get("region", {})
+        return cls(
+            name=str(payload["name"]),
+            target=str(payload["target"]),
+            x=int(region["x"]),
+            y=int(region["y"]),
+            width=int(region["width"]),
+            height=int(region["height"]),
+            slots=tuple(int(slot) for slot in payload["slots"]),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "target": self.target,
+            "region": {"x": self.x, "y": self.y, "width": self.width, "height": self.height},
+            "slots": list(self.slots),
+        }
+
+    def contains(self, x: int, y: int) -> bool:
+        return self.x <= x < self.x + self.width and self.y <= y < self.y + self.height
+
+
+def _validate_teams(teams: list[Team], width: int, height: int, player_count: int) -> None:
+    seen: set[int] = set()
+    for team in teams:
+        if team.width < 1 or team.height < 1:
+            raise ValueError(f"team {team.name!r} has an empty region")
+        if team.x < 0 or team.y < 0 or team.x + team.width > width or team.y + team.height > height:
+            raise ValueError(f"team {team.name!r} has a region outside the canvas")
+        for slot in team.slots:
+            if not (0 <= slot < player_count):
+                raise ValueError(f"team {team.name!r} claims unknown slot {slot}")
+            if slot in seen:
+                raise ValueError(f"slot {slot} belongs to more than one team")
+            seen.add(slot)
+    if len(seen) != player_count:
+        raise ValueError("every player must belong to exactly one team")
+
+
+def _team_index_by_slot(teams: list[Team], player_count: int) -> list[int | None]:
+    by_slot: list[int | None] = [None] * player_count
+    for index, team in enumerate(teams):
+        for slot in team.slots:
+            by_slot[slot] = index
+    return by_slot
+
+
 def choose_target(targets: list[str], seed: int | str | None) -> str:
     if not targets:
         raise ValueError("targets must not be empty")
@@ -44,6 +112,7 @@ class PixelArtEngine:
         target: str,
         player_names: list[str],
         turns_per_round: int | None = None,
+        teams: list[Team] | None = None,
     ) -> None:
         if width < 1 or height < 1 or max_turns < 1:
             raise ValueError("width, height, and max_turns must be positive")
@@ -51,6 +120,10 @@ class PixelArtEngine:
             raise ValueError("at least one player is required")
         if turns_per_round is not None and turns_per_round < 1:
             raise ValueError("turns_per_round must be positive")
+        if teams:
+            _validate_teams(teams, width, height, len(player_names))
+        self.teams = list(teams) if teams else []
+        self.team_of = _team_index_by_slot(self.teams, len(player_names))
         self.width = width
         self.height = height
         self.max_turns = max_turns
@@ -89,7 +162,34 @@ class PixelArtEngine:
         """0-based turn index within the current round."""
         return self.turn - (self.round - 1) * self.turns_per_round
 
-    def post_message(self, slot: int, text: str) -> bool:
+    def region_canvas(self, team_index: int) -> tuple[list[str], int, int]:
+        """Crop one team's region out of the shared canvas as its own image."""
+        team = self.teams[team_index]
+        pixels: list[str] = []
+        for y in range(team.y, team.y + team.height):
+            start = y * self.width + team.x
+            pixels.extend(self.canvas[start : start + team.width])
+        return pixels, team.width, team.height
+
+    def _message_record(self, slot: int, text: str, public: bool) -> dict[str, Any]:
+        return {
+            "turn": self.turn,
+            "slot": slot,
+            "player": self.player_names[slot],
+            "text": text,
+            # Without teams every message is public, which is the old behavior.
+            "team": self.team_of[slot] if self.teams else None,
+            "public": True if not self.teams else public,
+        }
+
+    def messages_visible_to(self, slot: int) -> list[dict[str, Any]]:
+        """The board as one seat sees it: public posts plus its own team's."""
+        if not self.teams:
+            return self.messages
+        team = self.team_of[slot]
+        return [m for m in self.messages if m["public"] or m["team"] == team]
+
+    def post_message(self, slot: int, text: str, public: bool = False) -> bool:
         """Post one board message immediately, outside the paint barrier."""
         if self.done or not (0 <= slot < len(self.player_names)):
             return False
@@ -103,14 +203,7 @@ class PixelArtEngine:
         )
         if posted_this_turn >= 8:
             return False
-        self.messages.append(
-            {
-                "turn": self.turn,
-                "slot": slot,
-                "player": self.player_names[slot],
-                "text": text,
-            }
-        )
+        self.messages.append(self._message_record(slot, text, public))
         return True
 
     def parse_action(self, raw: Any) -> Action | None:
@@ -152,14 +245,9 @@ class PixelArtEngine:
         for slot in sorted(valid):
             action = valid[slot]
             if action.message:
-                self.messages.append(
-                    {
-                        "turn": self.turn,
-                        "slot": slot,
-                        "player": self.player_names[slot],
-                        "text": action.message,
-                    }
-                )
+                # A message bundled with paint is team-scoped in team play; use
+                # an explicit public post to talk across the table.
+                self.messages.append(self._message_record(slot, action.message, public=False))
             contenders = by_pixel[(action.paint.x, action.paint.y)]
             if len(contenders) > 1:
                 collided.append(slot)
@@ -180,7 +268,7 @@ class PixelArtEngine:
         }
 
     def snapshot(self, *, turn_messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-        return {
+        snapshot = {
             "type": "state",
             "width": self.width,
             "height": self.height,
@@ -199,8 +287,27 @@ class PixelArtEngine:
             "completed_slots": sorted(self.completed),
             "done": self.done,
         }
+        if self.teams:
+            snapshot["teams"] = [team.to_dict() for team in self.teams]
+        return snapshot
 
     def results(self) -> dict[str, Any]:
+        if self.teams:
+            return {
+                "scores": [0.0] * len(self.player_names),
+                "target": self.target,
+                "teams": [
+                    team.to_dict()
+                    | {"accepted_pixels": sum(self.accepted_pixels[slot] for slot in team.slots)}
+                    for team in self.teams
+                ],
+                "turns": self.turn,
+                "max_turns": self.max_turns,
+                "completed_slots": sorted(self.completed),
+                "ended_by_agents": len(self.completed) >= len(self.player_names),
+                "accepted_pixels": self.accepted_pixels.copy(),
+                "final_canvas": self.canvas.copy(),
+            }
         return {
             # This MVP is human-scored. Zeroes keep the platform contract honest:
             # accepted pixel counts are diagnostics, not a quality score.

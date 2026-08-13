@@ -99,11 +99,23 @@ h1 { font-size: 22px; font-weight: 700; margin: 4px 0 0; letter-spacing: 0.02em;
   margin: 0 auto;
 }
 #board .c {
-  width: 20px; height: 20px; background: var(--card);
+  box-sizing: border-box;
+  width: var(--cell, 20px); height: var(--cell, 20px); background: var(--card);
   display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 700; line-height: 1; user-select: none;
+  font-size: calc(var(--cell, 20px) * 0.45); font-weight: 700; line-height: 1; user-select: none;
 }
 #board .c.changed { box-shadow: inset 0 0 0 2.5px var(--ink); }
+/* The seam between the two scored halves of a versus canvas. */
+#board .c.seam { border-left: 2px solid var(--muted); }
+.halves { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; margin-bottom: 8px; }
+.half { display: flex; align-items: baseline; gap: 7px; }
+.half .sc { font-weight: 700; font-size: 15px; }
+.half .win { color: var(--good); font-weight: 700; letter-spacing: 0.08em; font-size: 11px; }
+.tag {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--muted); flex: none;
+}
+.tag.pub { color: var(--accent); border-color: var(--accent); }
 .cardfoot {
   display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   border-top: 1px solid var(--line);
@@ -178,6 +190,7 @@ details.res pre { font-size: 11.5px; background: var(--paper); border: 1px solid
   <div class="top">
     <section class="card">
       <h2 id="canvastitle">Canvas</h2>
+      <div class="halves" id="halves" style="display:none"></div>
       <div class="gridbox"><div id="board"></div></div>
       <div class="controls">
         <button id="prev" aria-label="previous turn">&#8249;</button>
@@ -229,13 +242,23 @@ const frames = data.frames;
 const results = data.results;
 const traces = data.traces || {};
 const W = frames[0].width, H = frames[0].height;
-const SEATS = ["#EF4444", "#3B82F6", "#22C55E", "#F59E0B", "#A855F7"];
+const SEATS = ["#EF4444", "#3B82F6", "#22C55E", "#F59E0B", "#A855F7",
+               "#EC4899", "#14B8A6", "#84CC16", "#6366F1", "#F97316"];
 // CVD-validated stacking order for the token chart (green, blue, amber, red, purple).
-const STACK_ORDER = [2, 1, 3, 0, 4];
+const STACK_ORDER = [2, 1, 3, 0, 4, 5, 6, 7, 8, 9];
 const names = frames[0].player_names;
 const seatCount = names.length;
 const WHITE = "#FFFFFF";
 const hasTraces = Object.keys(traces).length > 0;
+// Adversarial run: two teams, one canvas, one score line each.
+const TEAMS = frames[0].teams || [];
+const versus = TEAMS.length === 2;
+const TEAM_COLORS = ["#D97706", "#3B82F6"];
+const teamOf = {};
+TEAMS.forEach((t, i) => t.slots.forEach(s => { teamOf[s] = i; }));
+function teamScores(i) {
+  return (frames[i].team_feedback || []).map(f => (f && f.target_score) || 0);
+}
 
 function esc(v) { const d = document.createElement("div"); d.textContent = v; return d.innerHTML; }
 function fmtTokens(n) { return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n); }
@@ -244,10 +267,14 @@ function inkFor(hex) {
   return 0.299 * r + 0.587 * g + 0.114 * b > 140 ? "#26221A" : "#FFFFFF";
 }
 
-document.getElementById("eyebrow").textContent = "codrawing replay \\u00b7 " + (results.image_model || "");
-document.getElementById("title").textContent =
-  "Target: " + frames[0].target + " \\u00b7 " + seatCount + " agents \\u00b7 " + frames[0].max_turns + " turns";
-document.getElementById("canvastitle").textContent = "Canvas (" + W + "\\u00d7" + H + ")";
+document.getElementById("eyebrow").textContent =
+  (versus ? "codrawing versus \\u00b7 " : "codrawing replay \\u00b7 ") + (results.image_model || "");
+document.getElementById("title").textContent = versus
+  ? TEAMS.map(t => t.name + ": " + t.target).join("  vs  ") +
+    " \\u00b7 " + seatCount + " agents \\u00b7 " + frames[0].max_turns + " turns"
+  : "Target: " + frames[0].target + " \\u00b7 " + seatCount + " agents \\u00b7 " + frames[0].max_turns + " turns";
+document.getElementById("canvastitle").textContent =
+  "Canvas (" + W + "\\u00d7" + H + ")" + (versus ? " \\u2014 each half scored on its own" : "");
 
 function turnRecords(recs) { return recs.filter(r => (r.phase || "turn") === "turn"); }
 
@@ -288,15 +315,28 @@ for (const fr of frames) {
   totalSeconds += u.seconds;
 }
 for (const slot of Object.keys(traces)) totalCostAll += totalCost(traces[slot]);
-const stats = [
-  ["best score", (bestScore * 100).toFixed(1) + "%", ""],
-  ["final score", finalFb.target_score !== undefined ? (finalFb.target_score * 100).toFixed(1) + "%" : "\\u2014", ""],
-  ["threshold", finalFb.pass_threshold !== undefined ? (finalFb.pass_threshold * 100).toFixed(0) + "%" : "\\u2014", ""],
-  ["evaluation", results.evaluation_passed ? "PASS" : "NOT PASSING", results.evaluation_passed ? "pass" : "fail"],
-  ["turns", results.turns + "/" + (results.max_turns || frames[0].max_turns) +
-    (results.ended_by_agents ? " \\u00b7 ended by agents" : ""), ""],
-  ["accepted pixels", results.accepted_pixels.join(" / "), ""],
-];
+const stats = versus
+  ? [
+      ...(results.teams || []).map((t, i) => [
+        t.name + " \\u00b7 " + t.target + " (final)",
+        (t.final_score * 100).toFixed(1) + "%",
+        results.winner === i ? "pass" : "",
+      ]),
+      ["winner", results.winner_name || "\\u2014", results.winner === null ? "" : "pass"],
+      ["turns", results.turns + "/" + (results.max_turns || frames[0].max_turns) +
+        (results.ended_by_agents ? " \\u00b7 ended by agents" : ""), ""],
+      ["pixels per team", (results.teams || []).map(t => t.accepted_pixels).join(" / "), ""],
+      ["best ever (stat only)", (results.teams || []).map(t => (t.best_score * 100).toFixed(1) + "%").join(" / "), ""],
+    ]
+  : [
+      ["best score", (bestScore * 100).toFixed(1) + "%", ""],
+      ["final score", finalFb.target_score !== undefined ? (finalFb.target_score * 100).toFixed(1) + "%" : "\\u2014", ""],
+      ["threshold", finalFb.pass_threshold !== undefined ? (finalFb.pass_threshold * 100).toFixed(0) + "%" : "\\u2014", ""],
+      ["evaluation", results.evaluation_passed ? "PASS" : "NOT PASSING", results.evaluation_passed ? "pass" : "fail"],
+      ["turns", results.turns + "/" + (results.max_turns || frames[0].max_turns) +
+        (results.ended_by_agents ? " \\u00b7 ended by agents" : ""), ""],
+      ["accepted pixels", results.accepted_pixels.join(" / "), ""],
+    ];
 if (hasTraces) {
   stats.push(["output tokens", fmtTokens(totalOut), ""]);
   if (totalCostAll) stats.push(["cost (api equiv)", "$" + totalCostAll.toFixed(2), ""]);
@@ -307,17 +347,26 @@ document.getElementById("stats").innerHTML = stats.map(([k, v, cls]) =>
 ).join("");
 
 document.getElementById("legend").innerHTML = names.map((n, i) =>
-  '<span><span class="chip" style="background:' + SEATS[i] + '"></span>' + esc(n) + "</span>"
+  '<span><span class="chip" style="background:' + SEATS[i % SEATS.length] + '"></span>' + esc(n) +
+  (versus && teamOf[i] !== undefined ? " (" + esc(TEAMS[teamOf[i]].name) + ")" : "") + "</span>"
 ).join("");
 
+const CELL = W > 40 ? 14 : 20;
 const board = document.getElementById("board");
-board.style.gridTemplateColumns = "repeat(" + W + ", 20px)";
+board.style.setProperty("--cell", CELL + "px");
+board.style.gridTemplateColumns = "repeat(" + W + ", " + CELL + "px)";
+// A wide versus canvas needs the full row; the board moves below it.
+if (W > 40) document.querySelector(".top").style.gridTemplateColumns = "1fr";
+const seamX = versus ? TEAMS[1].region.x : -1;
 const cells = [];
 for (let i = 0; i < W * H; i++) {
   const d = document.createElement("div");
-  d.className = "c";
+  d.className = "c" + (i % W === seamX ? " seam" : "");
   board.appendChild(d);
   cells.push(d);
+}
+if (versus) {
+  document.getElementById("halves").style.display = "";
 }
 
 const scrub = document.getElementById("scrub");
@@ -354,11 +403,25 @@ function show(f) {
   });
   document.getElementById("lastaction").textContent = acts.length ? acts.join(" \\u00b7 ") : "no accepted writes";
 
+  if (versus) {
+    const scores = teamScores(f);
+    document.getElementById("halves").innerHTML = TEAMS.map((t, i) =>
+      '<div class="half"><span class="chip" style="background:' + TEAM_COLORS[i] + '"></span>' +
+      "<span>" + esc(t.name) + " \\u00b7 " + esc(t.target) + '</span><span class="sc">' +
+      (scores[i] * 100).toFixed(1) + "%</span>" +
+      (f === frames.length - 1 && results.winner === i ? '<span class="win">WINNER</span>' : "") +
+      "</div>"
+    ).join("");
+  }
+
   const feed = [];
   for (let i = 0; i <= f; i++) {
     for (const m of frames[i].messages || []) {
+      const tag = !versus ? "" : m.public
+        ? '<span class="tag pub">public</span>'
+        : '<span class="tag">' + esc((TEAMS[m.team] || {}).name || "team") + "</span>";
       feed.push('<div class="msg' + (i === f ? " now" : "") + '">' +
-        '<span class="chip" style="background:' + SEATS[m.slot] + '"></span>' +
+        '<span class="chip" style="background:' + SEATS[m.slot % SEATS.length] + '"></span>' + tag +
         '<span class="who">T' + frames[i].turn + " " + esc(m.player) + "</span><span>" + esc(m.text) + "</span></div>");
     }
   }
@@ -369,7 +432,12 @@ function show(f) {
   drawScore(f);
   if (hasTraces) { drawTokens(f); drawTime(f); }
   const fb = frame.image_model_feedback;
-  document.getElementById("score-foot").textContent = fb
+  if (versus) {
+    const scores = teamScores(f);
+    document.getElementById("score-foot").textContent = "T" + frame.turn + " \\u00b7 " +
+      TEAMS.map((t, i) => t.name + " " + (scores[i] * 100).toFixed(1) + "%").join(" \\u00b7 ") +
+      " \\u00b7 " + (Math.abs(scores[0] - scores[1]) * 100).toFixed(1) + " point gap";
+  } else document.getElementById("score-foot").textContent = fb
     ? "T" + frame.turn + " \\u00b7 " + (fb.target_score * 100).toFixed(2) + "% \\u00b7 rank " +
       fb.target_rank + "/" + fb.label_count + " \\u00b7 top: " +
       fb.top_predictions.slice(0, 3).map(p => p.label + " " + (p.probability * 100).toFixed(0) + "%").join(", ")
@@ -390,6 +458,7 @@ const slotX = i => PAD.l + (i / frames.length) * PW;
 const slotW = Math.max(2, PW / frames.length - 2);
 
 function drawScore(f) {
+  if (versus) return drawVersusScore(f);
   const scores = frames.map(fr => fr.image_model_feedback ? fr.image_model_feedback.target_score : 0);
   const threshold = results.evaluation_threshold || 0;
   const max = Math.max(...scores, threshold, 0.01);
@@ -401,6 +470,19 @@ function drawScore(f) {
       '" stroke="var(--line)" stroke-dasharray="4 4" stroke-width="1"></line>' +
     '<path d="' + path + '" fill="none" stroke="var(--accent)" stroke-width="2"></path>' +
     '<circle cx="' + xAt(f) + '" cy="' + y(scores[f]) + '" r="4" fill="var(--accent)"></circle>';
+}
+
+// Versus: one line per team, so the lead and every swing in it is visible.
+function drawVersusScore(f) {
+  const series = TEAMS.map((_, team) => frames.map((_, i) => teamScores(i)[team] || 0));
+  const max = Math.max(0.01, ...series.flat());
+  const y = v => PAD.t + PH - (v / max) * PH;
+  const parts = series.map((scores, team) =>
+    '<path d="' + scores.map((v, i) => (i ? "L" : "M") + xAt(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ") +
+    '" fill="none" stroke="' + TEAM_COLORS[team] + '" stroke-width="2"></path>' +
+    '<circle cx="' + xAt(f) + '" cy="' + y(scores[f]) + '" r="4" fill="' + TEAM_COLORS[team] + '"></circle>'
+  );
+  document.getElementById("score-svg").innerHTML = parts.join("");
 }
 
 function drawTokens(f) {
@@ -420,7 +502,7 @@ function drawTokens(f) {
       yTop -= h;
       parts.push('<rect x="' + slotX(i).toFixed(1) + '" y="' + yTop.toFixed(1) +
         '" width="' + slotW.toFixed(1) + '" height="' + Math.max(0, h - 1).toFixed(1) +
-        '" rx="1" fill="' + SEATS[slot] + '"' + (i === f ? "" : ' opacity="0.55"') + "></rect>");
+        '" rx="1" fill="' + SEATS[slot % SEATS.length] + '"' + (i === f ? "" : ' opacity="0.55"') + "></rect>");
     }
   });
   document.getElementById("tokens-svg").innerHTML = parts.join("");
@@ -452,11 +534,16 @@ function tipHtml(i) {
   const frame = frames[i];
   const fb = frame.image_model_feedback;
   const rows = ["<strong>Turn " + frame.turn + "</strong>"];
-  if (fb) rows.push("score " + (fb.target_score * 100).toFixed(2) + "%");
+  if (versus) {
+    const scores = teamScores(i);
+    TEAMS.forEach((t, team) => rows.push(
+      '<span class="chip" style="display:inline-block;background:' + TEAM_COLORS[team] + '"></span> ' +
+      esc(t.name) + ": " + (scores[team] * 100).toFixed(2) + "%"));
+  } else if (fb) rows.push("score " + (fb.target_score * 100).toFixed(2) + "%");
   if (hasTraces) {
     const u = frameUsage(frame.turn);
     for (const slot of Object.keys(u.tokens))
-      rows.push('<span class="chip" style="display:inline-block;background:' + SEATS[slot] + '"></span> ' +
+      rows.push('<span class="chip" style="display:inline-block;background:' + SEATS[slot % SEATS.length] + '"></span> ' +
         esc(names[slot]) + ": " + fmtTokens(u.tokens[slot]) + " out, " +
         ((u.bySlot[slot] || {}).wall_seconds || 0).toFixed(1) + "s");
   }
@@ -494,8 +581,10 @@ if (hasTraces) {
     if (!interview) return "";
     const text = (interview.events || []).filter(e => e.type === "text").map(eventHtml).join("");
     return '<div class="tturn interview"><div class="tthead"><span class="chip" ' +
-      'style="display:inline-block;background:' + SEATS[slot] + '"></span> ' +
-      esc(names[slot] || ("Agent " + slot)) + "</div>" + (text || '<p class="ev">(no answer)</p>') + "</div>";
+      'style="display:inline-block;background:' + SEATS[slot % SEATS.length] + '"></span> ' +
+      esc(names[slot] || ("Agent " + slot)) +
+      (versus && teamOf[slot] !== undefined ? " \\u00b7 " + esc(TEAMS[teamOf[slot]].name) : "") +
+      "</div>" + (text || '<p class="ev">(no answer)</p>') + "</div>";
   }).join("");
   document.getElementById("interviews").style.display = "";
   document.getElementById("interviews-body").innerHTML = interviewCards ||
@@ -521,8 +610,9 @@ if (hasTraces) {
       (r.painted ? "" : " \\u00b7 NO PAINT") + "</div>" +
       (r.events || []).map(eventHtml).join("") + "</div>"
     ).join("");
-    return '<details class="agent"><summary><span class="chip" style="background:' + SEATS[slot] + '"></span>' +
+    return '<details class="agent"><summary><span class="chip" style="background:' + SEATS[slot % SEATS.length] + '"></span>' +
       esc(names[slot] || ("Agent " + slot)) +
+      (versus && teamOf[slot] !== undefined ? " \\u00b7 " + esc(TEAMS[teamOf[slot]].name) : "") +
       '<span class="meta">painted ' + painted + "/" + recs.length + " turns \\u00b7 " + fmtTokens(out) +
       " tokens out \\u00b7 " + (cost ? "$" + cost.toFixed(2) + " \\u00b7 " : "") +
       (recs.length ? (secs / recs.length).toFixed(1) : 0) + "s avg" +

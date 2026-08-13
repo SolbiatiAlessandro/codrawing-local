@@ -43,6 +43,8 @@ from claude_agent_sdk import (
 from codrawing.player.llm_player import SEAT_COLORS
 
 COLOR_HINT = "#RRGGBB"
+# Versus episodes seat eight agents; the base palette stops at five.
+EXTRA_SEAT_COLORS = ("#EC4899", "#14B8A6", "#84CC16", "#6366F1", "#F97316")
 
 GAME_PROMPT = """You are agent {slot}, one of {seat_count} agents in codrawing, a collaborative pixel-art game.
 All agents share one {width}x{height} canvas (x right, y down) and must draw the target together.
@@ -81,6 +83,59 @@ DEFAULT_POLICY = """How to play each turn:
 6. When the drawing is as good as it will get and more pixels would hurt, say so on the board and
    call complete instead of painting."""
 
+VERSUS_GAME_PROMPT = """You are agent {slot} on {team_name}, in codrawing versus: two teams fighting over ONE shared canvas.
+
+The canvas is {width}x{height} (x right, y down). It is split into two scored regions:
+- {team_name} (you, agents {team_slots}) must draw: {target}. Your region is x {x0}-{x1}, y {y0}-{y1}.
+- {enemy_name} (agents {enemy_slots}) must draw: {enemy_target}. Their region is x {ex0}-{ex1}, y {ey0}-{ey1}.
+
+After every turn a vision model crops each region and scores it, on its own, against that team's
+target. Both scores are public: you always see theirs and they always see yours.
+
+HOW YOU WIN: the FINAL turn's score decides it. The higher final score wins the episode. A peak
+you reach mid-episode is only a statistic — it does not protect you. Whatever the canvas looks
+like when the last turn resolves is what counts.
+
+You may paint ANY pixel on the canvas, including inside {enemy_name}'s region. Painting there
+cannot help your own score, but it damages theirs. #FFFFFF is white: painting it over an enemy
+pixel erases their work, and painting it over your own erases yours. Expect them to do the same
+to you. Episode length: {max_turns} turns. {round_line}All agents act in the same turn.
+
+You have access to five game APIs, exposed as tools:
+- paint_pixel(x, y, color): submit your single pixel for this turn, anywhere on the canvas. Each
+  agent paints exactly one pixel per turn. If two agents pick the same pixel in the same turn,
+  BOTH writes are dropped — including agents from opposite teams, so a predictable attack can be
+  blocked by standing on the pixel it wants.
+- message_board_send(text): post to your TEAM's private board. Only {team_name} sees it.
+- message_board_broadcast(text): post publicly. Both teams see it. Use it to negotiate, threaten,
+  offer a truce, or mislead. Nothing said publicly is enforced by the game.
+- message_board_read(): read the latest posts — your team's private board plus all public posts.
+- complete(): declare yourself finished. Irreversible: you stop acting for the rest of the
+  episode, and once EVERY agent on BOTH teams has called complete the episode ends early. Think
+  hard before using it: if you stop and the other team keeps painting, they can take your region
+  apart while you have no move left to answer.
+
+When ALL active agents have called paint_pixel, the turn resolves and the game moves on. You have
+a strict time budget per turn; an agent that misses the paint window loses its pixel for the turn.
+You also have a private workspace (files, bash, python) that persists across turns."""
+
+DEFAULT_VERSUS_POLICY = """How to play each turn:
+1. Use message_board_read to see your team's board and any public posts from the other side.
+2. Talk with message_board_send (team-private): on your FIRST turn, introduce yourself
+   ("I am agent {slot}...") and state your strategy. In later turns, coordinate: claim exact
+   coordinates, divide work, react to what your teammates post this turn. Use
+   message_board_broadcast only when you deliberately want the other team to hear you.
+3. Decide as a team how to split your pixels between building your own drawing and attacking
+   theirs. Both are legal; neither is required. Watch both scores and let the numbers tell you
+   which is paying off.
+4. Derive your share of the work from your seat number so your own teammates do not collide.
+5. Remember the clock: only the final turn's score counts. Damage done to you early can be
+   repaired, and a lead you hold early can be destroyed on the last turn.
+6. When coordination is clear, call paint_pixel EXACTLY ONCE, then end your reply. Do not stall:
+   read the board once, post at most TWO short messages, then paint. Post exact coordinates
+   ("agent N takes (x,y)"), not vague zones. Long file work is only worth it once, early, to
+   compute the full point plan. Infer the scorer's behavior from score deltas."""
+
 DEFAULT_SOLO_POLICY = """How to play each turn:
 1. Plan in your private workspace: keep a PLAN file with the full point plan, use python to
    compute exact coordinates. Long file work is only worth it once, early.
@@ -99,6 +154,50 @@ def claude_environment() -> None:
     env.setdefault("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
 
 
+def seat_color(slot: int) -> str:
+    """Palette entry for a seat; versus episodes seat more agents than the five
+    colors the single-team game was built around."""
+    palette = tuple(SEAT_COLORS) + EXTRA_SEAT_COLORS
+    return palette[slot % len(palette)]
+
+
+def team_of(observation: dict[str, Any], slot: int) -> int | None:
+    if observation.get("your_team") is not None:
+        return int(observation["your_team"])
+    for index, team in enumerate(observation.get("teams", [])):
+        if slot in team["slots"]:
+            return index
+    return None
+
+
+def build_versus_prompt(observation: dict[str, Any], slot: int, round_line: str) -> str:
+    teams = observation["teams"]
+    index = team_of(observation, slot) or 0
+    mine, theirs = teams[index], teams[1 - index]
+    mine_region, theirs_region = mine["region"], theirs["region"]
+    return VERSUS_GAME_PROMPT.format(
+        slot=slot,
+        team_name=mine["name"],
+        team_slots=", ".join(str(s) for s in mine["slots"]),
+        target=mine["target"],
+        x0=mine_region["x"],
+        x1=mine_region["x"] + mine_region["width"] - 1,
+        y0=mine_region["y"],
+        y1=mine_region["y"] + mine_region["height"] - 1,
+        enemy_name=theirs["name"],
+        enemy_slots=", ".join(str(s) for s in theirs["slots"]),
+        enemy_target=theirs["target"],
+        ex0=theirs_region["x"],
+        ex1=theirs_region["x"] + theirs_region["width"] - 1,
+        ey0=theirs_region["y"],
+        ey1=theirs_region["y"] + theirs_region["height"] - 1,
+        width=observation["width"],
+        height=observation["height"],
+        max_turns=observation["max_turns"],
+        round_line=round_line,
+    )
+
+
 def build_system_prompt(observation: dict[str, Any], slot: int) -> str:
     seat_count = len(observation.get("player_names", [])) or 1
     rounds = int(observation.get("rounds", 1) or 1)
@@ -108,17 +207,21 @@ def build_system_prompt(observation: dict[str, Any], slot: int) -> str:
         if rounds > 1
         else ""
     )
-    game = GAME_PROMPT.format(
-        slot=slot,
-        seat_count=seat_count,
-        width=observation["width"],
-        height=observation["height"],
-        target=observation["target"],
-        max_turns=observation["max_turns"],
-        round_line=round_line,
-        color=SEAT_COLORS[slot],
-    )
-    if seat_count == 1:
+    versus = bool(observation.get("teams"))
+    if versus:
+        game = build_versus_prompt(observation, slot, round_line)
+    else:
+        game = GAME_PROMPT.format(
+            slot=slot,
+            seat_count=seat_count,
+            width=observation["width"],
+            height=observation["height"],
+            target=observation["target"],
+            max_turns=observation["max_turns"],
+            round_line=round_line,
+            color=seat_color(slot),
+        )
+    if not versus and seat_count == 1:
         game += (
             "\nYou are the only agent in this episode: there is no one to coordinate with, "
             "collisions cannot happen, and the message board is your private log."
@@ -126,10 +229,12 @@ def build_system_prompt(observation: dict[str, Any], slot: int) -> str:
     policy_file = os.environ.get("AGENT_POLICY_FILE")
     if policy_file:
         policy = Path(policy_file).read_text()
+    elif versus:
+        policy = DEFAULT_VERSUS_POLICY
     else:
         policy = DEFAULT_SOLO_POLICY if seat_count == 1 else DEFAULT_POLICY
     # Plain token substitution: policy files may contain braces (JSON, code).
-    policy = policy.replace("{slot}", str(slot)).replace("{color}", SEAT_COLORS[slot])
+    policy = policy.replace("{slot}", str(slot)).replace("{color}", seat_color(slot))
     return f"{game}\n\n# Your policy\n{policy}"
 
 
@@ -150,6 +255,7 @@ class Seat:
     def __init__(self) -> None:
         self.websocket: Any = None
         self.slot: int | None = None
+        self.versus: bool = False
         self.turn: int = 0
         self.painted: bool = False
         self.completed: bool = False
@@ -171,7 +277,9 @@ class Seat:
                 elif kind == "board_update":
                     self.board.append(payload["message"])
                 elif kind == "observation":
-                    for message in payload.get("messages", []):
+                    # recent_messages is already filtered to what this seat may
+                    # see; merging it repairs any live update we missed.
+                    for message in payload.get("messages", []) + payload.get("recent_messages", []):
                         if message not in self.board:
                             self.board.append(message)
                     await self.observations.put(payload)
@@ -187,17 +295,33 @@ class Seat:
 seat = Seat()
 
 
+async def _post(text: str, public: bool) -> dict[str, Any]:
+    if seat.game_over:
+        return {"content": [{"type": "text", "text": "the episode is over"}]}
+    await seat.websocket.send(
+        json.dumps({"type": "message", "turn": seat.turn, "text": text[:4000], "public": public})
+    )
+    return {"content": [{"type": "text", "text": "posted publicly" if public else "posted"}]}
+
+
 @tool(
     "message_board_send",
-    "Post a message to the shared public message board. All agents see it immediately.",
+    "Post a message to your team's board. In a versus episode only your own team sees it; "
+    "otherwise every agent does.",
     {"text": str},
 )
 async def message_board_send(args: dict[str, Any]) -> dict[str, Any]:
-    if seat.game_over:
-        return {"content": [{"type": "text", "text": "the episode is over"}]}
-    text = str(args.get("text", ""))[:4000]
-    await seat.websocket.send(json.dumps({"type": "message", "turn": seat.turn, "text": text}))
-    return {"content": [{"type": "text", "text": "posted"}]}
+    return await _post(str(args.get("text", "")), public=False)
+
+
+@tool(
+    "message_board_broadcast",
+    "Post a message publicly, where BOTH teams can read it. Use it to negotiate, threaten, or "
+    "mislead the other team. Nothing said here is enforced by the game.",
+    {"text": str},
+)
+async def message_board_broadcast(args: dict[str, Any]) -> dict[str, Any]:
+    return await _post(str(args.get("text", "")), public=True)
 
 
 @tool(
@@ -206,9 +330,11 @@ async def message_board_send(args: dict[str, Any]) -> dict[str, Any]:
     {},
 )
 async def message_board_read(args: dict[str, Any]) -> dict[str, Any]:
-    tail = seat.board[-100:]
-    text = "\n".join(f"T{m['turn']} agent{m['slot']}: {m['text']}" for m in tail) or "(board is empty)"
-    return {"content": [{"type": "text", "text": text}]}
+    lines = []
+    for message in seat.board[-100:]:
+        channel = "PUBLIC " if seat.versus and message.get("public") else ""
+        lines.append(f"T{message['turn']} {channel}agent{message['slot']}: {message['text']}")
+    return {"content": [{"type": "text", "text": "\n".join(lines) or "(board is empty)"}]}
 
 
 @tool(
@@ -264,6 +390,59 @@ async def complete(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def score_line(feedback: dict[str, Any]) -> str:
+    return (
+        f"{feedback['target_score']:.4f} (delta {feedback['score_delta']:+.4f}), "
+        f"top: {', '.join(p['label'] for p in feedback.get('top_predictions', [])[:3])}"
+    )
+
+
+def versus_observation_text(observation: dict[str, Any], slot: int) -> str:
+    width = observation["width"]
+    teams = observation["teams"]
+    index = team_of(observation, slot) or 0
+    mine, theirs = teams[index], teams[1 - index]
+    region = mine["region"]
+
+    def in_region(x: int, y: int, box: dict[str, int]) -> bool:
+        return box["x"] <= x < box["x"] + box["width"] and box["y"] <= y < box["y"] + box["height"]
+
+    ours, enemy = [], []
+    for position, color in enumerate(observation["canvas"]):
+        if color == "#FFFFFF":
+            continue
+        x, y = position % width, position // width
+        owner = observation.get("owners", [])[position] if observation.get("owners") else -1
+        cell = f"{x},{y}:{color}(a{owner})" if owner >= 0 else f"{x},{y}:{color}"
+        (ours if in_region(x, y, region) else enemy).append(cell)
+
+    scores = observation.get("team_feedback") or []
+    lines = []
+    for entry in scores:
+        who = "YOUR TEAM" if entry["team"] == index else "THEM"
+        if "target_score" in entry:
+            lines.append(f"{who} ({entry['name']}, {entry['target']}): {score_line(entry)}")
+    standing = "unavailable"
+    if len(scores) == 2 and all("target_score" in entry for entry in scores):
+        gap = scores[index]["target_score"] - scores[1 - index]["target_score"]
+        standing = f"you are {'AHEAD' if gap > 0 else 'BEHIND' if gap < 0 else 'LEVEL'} by {abs(gap):.4f}"
+    turns_left = observation["max_turns"] - observation["turn"]
+
+    return f"""Turn {observation['turn']} of {observation['max_turns']} ({turns_left} turns left; only the score after the FINAL turn counts).
+Scores: {standing}
+{chr(10).join(lines) or 'no scorer feedback'}
+Last turn accepted agents: {observation.get('previous_accepted_slots', [])}; collided (dropped): {observation.get('previous_collision_slots', [])}.
+Agents that already called complete: {observation.get('completed_slots', [])}.
+
+Pixels in YOUR region ({mine['target']}, x {region['x']}-{region['x'] + region['width'] - 1}), as x,y:color(painter):
+{'; '.join(ours) if ours else '(empty)'}
+
+Pixels in THEIR region ({theirs['target']}):
+{'; '.join(enemy) if enemy else '(empty)'}
+
+Your turn: read the board, coordinate with your team, then call paint_pixel once (anywhere on the canvas)."""
+
+
 def observation_text(observation: dict[str, Any]) -> str:
     width = observation["width"]
     painted = [
@@ -306,9 +485,18 @@ async def main() -> None:
             first = await seat.observations.get()
             if first is None or seat.slot is None:
                 return
-            game_server = create_sdk_mcp_server(
-                name="game", tools=[message_board_send, message_board_read, paint_pixel, complete]
-            )
+            seat.versus = bool(first.get("teams"))
+            tools = [message_board_send, message_board_read, paint_pixel, complete]
+            allowed_game_tools = [
+                "mcp__game__message_board_send",
+                "mcp__game__message_board_read",
+                "mcp__game__paint_pixel",
+                "mcp__game__complete",
+            ]
+            if seat.versus:
+                tools.append(message_board_broadcast)
+                allowed_game_tools.append("mcp__game__message_board_broadcast")
+            game_server = create_sdk_mcp_server(name="game", tools=tools)
             options = ClaudeAgentOptions(
                 system_prompt=build_system_prompt(first, seat.slot),
                 mcp_servers={"game": game_server},
@@ -319,10 +507,7 @@ async def main() -> None:
                     "Edit",
                     "Glob",
                     "Grep",
-                    "mcp__game__message_board_send",
-                    "mcp__game__message_board_read",
-                    "mcp__game__paint_pixel",
-                    "mcp__game__complete",
+                    *allowed_game_tools,
                 ],
                 permission_mode="bypassPermissions",
                 cwd=str(workspace),
@@ -350,7 +535,11 @@ async def main() -> None:
                         observation = await seat.observations.get()
                         continue
                     seat.painted = False
-                    prompt = observation_text(observation)
+                    prompt = (
+                        versus_observation_text(observation, seat.slot)
+                        if seat.versus
+                        else observation_text(observation)
+                    )
                     turn_started = time.monotonic()
                     events: list[dict[str, Any]] = []
                     usage: dict[str, Any] = {}
@@ -407,17 +596,22 @@ async def main() -> None:
                 interview_started = time.monotonic()
                 events = []
                 usage = {}
+                interview = (
+                    "The episode is over. Write a short debrief for the team notebook: "
+                    "(1) How did it go — did you win, and why? (2) What did you learn about the "
+                    "scorer, about coordinating with your own team, and about the other team's "
+                    "behavior? (3) How did you split your effort between building your drawing "
+                    "and attacking theirs, and was that the right call? (4) What would you change "
+                    "next time? Do not call any game tools; just answer."
+                    if seat.versus
+                    else "The episode is over. Write a short debrief for the team notebook: "
+                    "(1) How did it go? (2) What did you learn about the classifier and "
+                    "about coordinating with the other agents? (3) What would you change "
+                    "next time? Do not call any game tools; just answer."
+                )
                 try:
                     await asyncio.wait_for(
-                        _run_query(
-                            client,
-                            "The episode is over. Write a short debrief for the team notebook: "
-                            "(1) How did it go? (2) What did you learn about the classifier and "
-                            "about coordinating with the other agents? (3) What would you change "
-                            "next time? Do not call any game tools; just answer.",
-                            events,
-                            usage,
-                        ),
+                        _run_query(client, interview, events, usage),
                         timeout=120,
                     )
                 except (TimeoutError, asyncio.TimeoutError):

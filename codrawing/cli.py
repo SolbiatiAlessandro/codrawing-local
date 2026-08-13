@@ -46,10 +46,15 @@ async def run(
     port: int,
     policy: str | None,
     scorer: str = "quickdraw",
+    teams: list[dict] | None = None,
+    width: int = 24,
+    height: int = 24,
+    slug: str | None = None,
 ) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     # Parallel launches can share a second; a short suffix keeps dirs unique.
-    run_dir = REPO_ROOT / "runs" / f"agent-{target.replace(' ', '-')}-{stamp}-{secrets.token_hex(2)}"
+    name = slug or f"agent-{target.replace(' ', '-')}"
+    run_dir = REPO_ROOT / "runs" / f"{name}-{stamp}-{secrets.token_hex(2)}"
     run_dir.mkdir(parents=True)
     policy_path: Path | None = None
     if policy is not None:
@@ -60,8 +65,8 @@ async def run(
     config = {
         "tokens": tokens,
         "players": [{"name": f"Agent {index + 1}"} for index in range(seats)],
-        "width": 24,
-        "height": 24,
+        "width": width,
+        "height": height,
         "max_turns": turns,
         "targets": [target],
         "player_connect_timeout_seconds": 60,
@@ -71,6 +76,8 @@ async def run(
         "environment": f"{target} · {turns} turns"
         + (f" · {scorer}" if scorer != "quickdraw" else ""),
     }
+    if teams:
+        config["teams"] = teams
     if turns_per_round:
         config["turns_per_round"] = turns_per_round
     (run_dir / "config.json").write_text(json.dumps(config, indent=2))
@@ -143,6 +150,13 @@ async def run(
     results = json.loads((run_dir / "results.json").read_text())
     print(f"run directory: {run_dir}")
     print(f"accepted pixels by seat: {results['accepted_pixels']}")
+    if results.get("teams"):
+        for team in results["teams"]:
+            print(
+                f"{team['name']} ({team['target']}): final {team['final_score']:.4f} "
+                f"· best {team['best_score']:.4f} · {team['accepted_pixels']} pixels"
+            )
+        print(f"WINNER: {results.get('winner_name')}")
     feedback = results.get("final_image_model_feedback")
     if feedback:
         print(f"best score: {results.get('best_target_score'):.4f}")
@@ -194,6 +208,67 @@ def main() -> None:
 
     asyncio.run(
         run(args.seats, turns, turns_per_round, args.target, args.model, args.port, policy, args.scorer)
+    )
+
+
+def versus_main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="codrawing-versus",
+        description="Two teams of Claude Code agents fight over one shared canvas. Each team "
+        "draws its own target in its own half; the half is cropped and scored on its own every "
+        "turn. Any agent may paint anywhere, so the other team's half can be sabotaged. The "
+        "team with the higher score on the FINAL turn wins.",
+    )
+    parser.add_argument("--left", default="pineapple", help="target for the team on the left half")
+    parser.add_argument("--right", default="strawberry", help="target for the team on the right half")
+    parser.add_argument("--seats-per-team", type=int, default=4, help="agents per team (default 4)")
+    parser.add_argument("--turns", type=int, default=20, help="total turns")
+    parser.add_argument("--half-size", type=int, default=32, help="width and height of each team's half")
+    parser.add_argument("--model", default="claude-sonnet-5", help="model for every agent seat")
+    parser.add_argument("--policy", default=None, help="inline policy prompt shared by all seats")
+    parser.add_argument("--policy-file", default=None, help="path to a policy prompt file shared by all seats")
+    parser.add_argument("--port", type=int, default=8332)
+    parser.add_argument(
+        "--scorer",
+        choices=["judge", "mobileclip", "quickdraw"],
+        default="judge",
+        help="grader for each half (default judge: a vision LLM scores each half 0-100)",
+    )
+    args = parser.parse_args()
+
+    if args.policy and args.policy_file:
+        parser.error("use either --policy or --policy-file, not both")
+    policy = args.policy
+    if args.policy_file:
+        policy = Path(args.policy_file).read_text()
+
+    per_team = args.seats_per_team
+    half = args.half_size
+    teams = [
+        {
+            "name": f"Team {'AB'[index]}",
+            "target": target,
+            "region": {"x": index * half, "y": 0, "width": half, "height": half},
+            "slots": list(range(index * per_team, (index + 1) * per_team)),
+        }
+        for index, target in enumerate((args.left, args.right))
+    ]
+
+    asyncio.run(
+        run(
+            seats=per_team * 2,
+            turns=args.turns,
+            turns_per_round=None,
+            target=f"{args.left} vs {args.right}",
+            model=args.model,
+            port=args.port,
+            policy=policy,
+            scorer=args.scorer,
+            teams=teams,
+            width=half * 2,
+            height=half,
+            slug=f"versus-{args.left.replace(' ', '-')}-vs-{args.right.replace(' ', '-')}",
+        )
     )
 
 

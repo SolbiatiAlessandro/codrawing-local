@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from codrawing.game.engine import PixelArtEngine, choose_target
+from codrawing.game.engine import PixelArtEngine, Team, choose_target
 from codrawing.game.image_model import MODEL_NAME, PASS_THRESHOLD, TARGET_INDICES
 from codrawing.player.llm_player import (
     AgentMemory,
@@ -65,6 +65,95 @@ class PixelArtEngineTest(unittest.TestCase):
         engine.resolve({0: action(1, 1)})
         self.assertEqual(engine.results()["scores"], [0.0] * 5)
         self.assertTrue(engine.done)
+
+
+class VersusEngineTest(unittest.TestCase):
+    """Two teams, one canvas: each half is scored on its own, anyone may paint anywhere."""
+
+    def make_engine(self, max_turns: int = 3) -> PixelArtEngine:
+        return PixelArtEngine(
+            width=8,
+            height=4,
+            max_turns=max_turns,
+            target="pineapple vs strawberry",
+            player_names=[f"Agent {index + 1}" for index in range(4)],
+            teams=[
+                Team("Team A", "pineapple", 0, 0, 4, 4, (0, 1)),
+                Team("Team B", "strawberry", 4, 0, 4, 4, (2, 3)),
+            ],
+        )
+
+    def test_region_crop_is_the_image_each_team_is_scored_on(self) -> None:
+        engine = self.make_engine()
+        engine.resolve({0: action(1, 0, "#111111"), 2: action(5, 2, "#222222")})
+        left, width, height = engine.region_canvas(0)
+        right, _, _ = engine.region_canvas(1)
+        self.assertEqual((width, height), (4, 4))
+        self.assertEqual(left[1], "#111111")
+        self.assertEqual(right[4 * 2 + 1], "#222222")
+        # A pixel painted in the other half never appears in your own crop.
+        self.assertNotIn("#222222", left)
+        self.assertNotIn("#111111", right)
+
+    def test_a_seat_may_paint_and_erase_inside_the_other_teams_region(self) -> None:
+        engine = self.make_engine()
+        engine.resolve({2: action(5, 1, "#222222")})
+        result = engine.resolve({0: action(5, 1, "#FFFFFF")})
+        self.assertEqual(result["accepted_slots"], [0])
+        right, _, _ = engine.region_canvas(1)
+        self.assertNotIn("#222222", right)
+
+    def test_cross_team_collision_drops_both_writes(self) -> None:
+        engine = self.make_engine()
+        result = engine.resolve({0: action(6, 1, "#111111"), 3: action(6, 1, "#222222")})
+        self.assertEqual(result["accepted_slots"], [])
+        self.assertEqual(result["collision_slots"], [0, 3])
+
+    def test_team_posts_stay_private_and_broadcasts_reach_everyone(self) -> None:
+        engine = self.make_engine()
+        self.assertTrue(engine.post_message(0, "I take (2,2)"))
+        self.assertTrue(engine.post_message(1, "truce?", public=True))
+        self.assertEqual(
+            [m["text"] for m in engine.messages_visible_to(0)], ["I take (2,2)", "truce?"]
+        )
+        self.assertEqual([m["text"] for m in engine.messages_visible_to(2)], ["truce?"])
+        # A message bundled with a paint action is team-scoped too.
+        engine.resolve({0: action(1, 1, message="outlining")})
+        self.assertNotIn("outlining", [m["text"] for m in engine.messages_visible_to(3)])
+
+    def test_snapshot_and_results_carry_the_teams(self) -> None:
+        engine = self.make_engine(max_turns=1)
+        engine.resolve({0: action(1, 1), 2: action(5, 1)})
+        self.assertEqual(engine.snapshot()["teams"][1]["target"], "strawberry")
+        results = engine.results()
+        self.assertEqual([team["accepted_pixels"] for team in results["teams"]], [1, 1])
+        self.assertEqual(results["teams"][0]["slots"], [0, 1])
+
+    def test_a_malformed_team_setup_is_rejected(self) -> None:
+        def build(**overrides: object) -> None:
+            teams = overrides.get(
+                "teams",
+                [
+                    Team("Team A", "pineapple", 0, 0, 4, 4, (0, 1)),
+                    Team("Team B", "strawberry", 4, 0, 4, 4, (2, 3)),
+                ],
+            )
+            PixelArtEngine(
+                width=8,
+                height=4,
+                max_turns=2,
+                target="x",
+                player_names=["a", "b", "c", "d"],
+                teams=teams,
+            )
+
+        build()  # the valid setup must not raise
+        with self.assertRaises(ValueError):  # region off the canvas
+            build(teams=[Team("A", "p", 0, 0, 4, 4, (0, 1)), Team("B", "s", 6, 0, 4, 4, (2, 3))])
+        with self.assertRaises(ValueError):  # a slot on both teams
+            build(teams=[Team("A", "p", 0, 0, 4, 4, (0, 1)), Team("B", "s", 4, 0, 4, 4, (1, 2, 3))])
+        with self.assertRaises(ValueError):  # slot 3 left teamless
+            build(teams=[Team("A", "p", 0, 0, 4, 4, (0, 1)), Team("B", "s", 4, 0, 4, 4, (2,))])
 
 
 class TemplateTest(unittest.TestCase):

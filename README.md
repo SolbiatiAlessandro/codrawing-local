@@ -49,6 +49,35 @@ went, what it learned, what to change next time), recorded in its trace and
 shown at the top of its panel in the report. Traces also capture the model's
 summarized thinking, every tool call, token usage, and per-turn timing.
 
+## Run an adversarial episode (two teams, one canvas)
+
+```bash
+.venv/bin/codrawing-versus --left pineapple --right strawberry --turns 20
+```
+
+Two teams of four agents share one canvas, split into a left and a right
+half. Each team has its own target. After every turn the scorer crops each
+half and grades it, on its own, against that team's target. Both scores are
+public.
+
+- **Any agent may paint any pixel**, including inside the other team's half.
+  Painting there cannot raise your own score, but it lowers theirs, and
+  `#FFFFFF` erases whatever was under it. Collisions still drop both writes,
+  so standing on a pixel an opponent wants is a block.
+- **The final turn decides the winner.** Best-ever is recorded but wins
+  nothing. If a peak could not be taken away there would be no reason to
+  attack, and no reason to defend a drawing once it looked good.
+- **Two message channels.** `message_board_send` reaches only your own team;
+  `message_board_broadcast` reaches everyone, for negotiating, threatening,
+  or misleading. The game enforces nothing that is said.
+
+Options: `--seats-per-team` (default 4), `--half-size` (default 32, so the
+canvas is 64x32), `--scorer` (default `judge`), `--model`, `--policy` /
+`--policy-file`, `--turns`. The default `judge` scorer calls a vision model
+once per half per turn, so any target string works. Artifacts land in
+`runs/versus-<left>-vs-<right>-<timestamp>/` with the same report page,
+showing one score line per team and a winner.
+
 Single-call CLI seats (faster, cheaper, alternates `codex` and `claude`):
 
 ```bash
@@ -105,7 +134,7 @@ pixel per turn.
 
 | Module | Seat behavior | Needs |
 | --- | --- | --- |
-| `codrawing.player.agent_player` | Persistent Claude Code session with game tools (paint, board) and a private workspace | `claude` CLI |
+| `codrawing.player.agent_player` | Persistent Claude Code session with game tools (paint, board) and a private workspace; team-aware in versus episodes | `claude` CLI |
 | `codrawing.player.cli_player` | One `claude`/`codex` CLI call per turn | `claude` or `codex` CLI |
 | `codrawing.player.llm_player` | One direct Anthropic API call per turn | `ANTHROPIC_API_KEY` |
 | `codrawing.player.template_player` | Deterministic template drawing, no model | nothing |

@@ -70,7 +70,9 @@
   </div>
 </main>
 <script>
-  const SEAT_COLORS = ['#EF4444', '#3B82F6', '#22C55E', '#F59E0B', '#A855F7'];
+  const SEAT_COLORS = ['#EF4444', '#3B82F6', '#22C55E', '#F59E0B', '#A855F7',
+                       '#EC4899', '#14B8A6', '#84CC16', '#6366F1', '#F97316'];
+  const TEAM_COLORS = ['#D97706', '#3B82F6'];
   const WHITE = '#FFFFFF';
   const board = document.querySelector('#board');
   const boardCtx = board.getContext('2d');
@@ -106,8 +108,8 @@
   }
 
   function initRobots(count) {
-    robotsPane.innerHTML = SEAT_COLORS.slice(0, count).map((color, index) =>
-      '<div class="robotrow">' + robotSvg(color, index) +
+    robotsPane.innerHTML = Array.from({ length: count }, (_, index) =>
+      '<div class="robotrow">' + robotSvg(SEAT_COLORS[index % SEAT_COLORS.length], index) +
       '<div class="bubble quiet" id="bubble-' + index + '"><span class="say">&hellip;</span></div></div>'
     ).join('');
   }
@@ -133,8 +135,11 @@
 
   function drawBoard(frame, previous) {
     const box = document.querySelector('.boardbox');
-    const avail = Math.min(box.clientWidth - 8, box.clientHeight - 8);
-    const cell = Math.max(6, Math.floor(avail / Math.max(frame.width, frame.height)));
+    // Fit both axes: a versus canvas is twice as wide as it is tall.
+    const cell = Math.max(
+      6,
+      Math.floor(Math.min((box.clientWidth - 8) / frame.width, (box.clientHeight - 8) / frame.height))
+    );
     const size = { w: frame.width * cell + 1, h: frame.height * cell + 1 };
     const scale = window.devicePixelRatio || 1;
     board.width = size.w * scale; board.height = size.h * scale;
@@ -169,6 +174,14 @@
       }
       if (previous && previous.canvas[i] !== color) changed.push(i);
     }
+    // Seam between the two independently scored halves of a versus canvas.
+    const teams = frame.teams || [];
+    if (teams.length === 2) {
+      const seam = teams[1].region.x * cell + 0.5;
+      boardCtx.strokeStyle = '#7A7466';
+      boardCtx.lineWidth = 2;
+      boardCtx.beginPath(); boardCtx.moveTo(seam, 0); boardCtx.lineTo(seam, size.h); boardCtx.stroke();
+    }
     boardCtx.strokeStyle = '#26221A';
     boardCtx.lineWidth = 2;
     for (const i of changed) {
@@ -186,7 +199,7 @@
     document.querySelector('#canvastitle').textContent = 'Canvas ' + frame.width + '×' + frame.height;
   }
 
-  function drawSpark(scores, threshold, currentIndex, turnsPerRound) {
+  function drawSpark(series, threshold, currentIndex, turnsPerRound, colors) {
     const scale = window.devicePixelRatio || 1;
     const w = spark.clientWidth || 500, h = 54;
     spark.width = w * scale; spark.height = h * scale;
@@ -196,13 +209,14 @@
     ctx.clearRect(0, 0, w, h);
     const pad = { l: 4, r: 46, t: 8, b: 6 };
     const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
-    const max = Math.max(0.05, ...scores);
-    const x = i => pad.l + (scores.length > 1 ? (i / (scores.length - 1)) * plotW : plotW / 2);
+    const length = Math.max(...series.map(s => s.length), 1);
+    const max = Math.max(0.05, ...series.flat());
+    const x = i => pad.l + (length > 1 ? (i / (length - 1)) * plotW : plotW / 2);
     const y = v => pad.t + plotH - (v / max) * plotH;
     ctx.font = '10px ui-monospace, Menlo, monospace';
-    if (turnsPerRound && turnsPerRound < scores.length - 1) {
+    if (turnsPerRound && turnsPerRound < length - 1) {
       ctx.strokeStyle = '#EFE9DC';
-      for (let t = turnsPerRound; t < scores.length - 1; t += turnsPerRound) {
+      for (let t = turnsPerRound; t < length - 1; t += turnsPerRound) {
         ctx.beginPath(); ctx.moveTo(x(t), pad.t); ctx.lineTo(x(t), pad.t + plotH); ctx.stroke();
       }
     }
@@ -212,20 +226,34 @@
       ctx.beginPath(); ctx.moveTo(pad.l, y(threshold)); ctx.lineTo(w - pad.r, y(threshold)); ctx.stroke();
       ctx.setLineDash([]);
     }
-    if (!scores.length) return;
-    ctx.strokeStyle = '#B45309';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    scores.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
-    ctx.stroke();
-    const i = currentIndex === undefined ? scores.length - 1 : currentIndex;
-    ctx.fillStyle = '#B45309';
-    ctx.beginPath(); ctx.arc(x(i), y(scores[i]), 3, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillText((100 * scores[i]).toFixed(1) + '%', w - pad.r + 5, y(scores[i]) + 3);
+    series.forEach((scores, k) => {
+      if (!scores.length) return;
+      const color = (colors && colors[k]) || '#B45309';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      scores.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
+      ctx.stroke();
+      const i = Math.min(currentIndex === undefined ? scores.length - 1 : currentIndex, scores.length - 1);
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x(i), y(scores[i]), 3, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillText((100 * scores[i]).toFixed(1) + '%', w - pad.r + 5, y(scores[i]) + 3);
+    });
   }
 
-  function renderFeedback(feedback) {
+  function renderFeedback(feedback, frame) {
     const el = document.querySelector('#feedback');
+    const teamFeedback = (frame && frame.team_feedback) || null;
+    if (teamFeedback && teamFeedback.length === 2) {
+      const best = Math.max(...teamFeedback.map(f => f.target_score || 0));
+      el.innerHTML = teamFeedback.map((f, k) =>
+        '<span style="color:' + TEAM_COLORS[k] + '">&#9632;</span> ' + esc(f.name) +
+        ' &middot; ' + esc(f.target) + ' <strong class="' + ((f.target_score || 0) === best ? 'pass' : '') + '">' +
+        (100 * (f.target_score || 0)).toFixed(1) + '%</strong>' +
+        ' (&Delta; ' + (100 * (f.score_delta || 0)).toFixed(1) + ')'
+      ).join(' &nbsp;|&nbsp; ') + ' &middot; the FINAL turn decides the winner';
+      return;
+    }
     if (!feedback) { el.textContent = 'Image-model feedback: unavailable'; return; }
     el.innerHTML =
       '<span class="' + (feedback.passing ? 'pass' : 'fail') + '">' + (feedback.passing ? 'PASSING' : 'NOT PASSING') + '</span>' +
@@ -235,20 +263,31 @@
       ' · rank ' + feedback.target_rank + (feedback.label_count ? '/' + feedback.label_count : '');
   }
 
-  function showFrame(frame, previous, scores, scoreIndex) {
-    document.querySelector('#target').textContent = frame.target;
+  function showFrame(frame, previous, series, scoreIndex) {
+    const teams = frame.teams || [];
+    document.querySelector('#target').textContent =
+      teams.length ? teams.map(t => t.target).join(' vs ') : frame.target;
     document.querySelector('#turn').textContent = frame.turn;
     document.querySelector('#max-turns').textContent = frame.max_turns;
     document.querySelector('#roundlabel').textContent =
       frame.rounds > 1 ? 'Round ' + frame.round + '/' + frame.rounds + ' · ' : '';
     drawBoard(frame, previous);
-    renderFeedback(frame.image_model_feedback);
+    renderFeedback(frame.image_model_feedback, frame);
     renderBubbles(frame);
-    drawSpark(scores, frame.image_model_feedback ? frame.image_model_feedback.pass_threshold : 0, scoreIndex, frame.turns_per_round);
+    // A versus episode has no single pass threshold; the higher final score wins.
+    const threshold = teams.length || !frame.image_model_feedback
+      ? 0
+      : frame.image_model_feedback.pass_threshold;
+    drawSpark(series, threshold, scoreIndex, frame.turns_per_round, teams.length ? TEAM_COLORS : null);
   }
 
   function replayScores() {
-    return frames.map(f => (f.image_model_feedback ? f.image_model_feedback.target_score : 0));
+    const teams = (frames[0] && frames[0].teams) || [];
+    if (teams.length) {
+      return teams.map((_, k) =>
+        frames.map(f => ((f.team_feedback || [])[k] || {}).target_score || 0));
+    }
+    return [frames.map(f => (f.image_model_feedback ? f.image_model_feedback.target_score : 0))];
   }
 
   function showReplayFrame(index) {
@@ -281,7 +320,13 @@
 
   let previousLiveFrame = null;
   function handleLive(payload) {
-    if (payload.image_model_feedback) liveScores.push(payload.image_model_feedback.target_score);
+    const values = payload.team_feedback
+      ? payload.team_feedback.map(f => f.target_score || 0)
+      : payload.image_model_feedback ? [payload.image_model_feedback.target_score] : [];
+    values.forEach((value, k) => {
+      liveScores[k] = liveScores[k] || [];
+      liveScores[k].push(value);
+    });
     showFrame(payload, previousLiveFrame, liveScores);
     previousLiveFrame = payload;
     document.querySelector('#framestamp').textContent = payload.done ? 'episode complete' : 'live';

@@ -23,6 +23,7 @@ mobileclip = [
 
 [project.scripts]
 codrawing-run = "codrawing.cli:main"
+codrawing-versus = "codrawing.cli:versus_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["codrawing"]

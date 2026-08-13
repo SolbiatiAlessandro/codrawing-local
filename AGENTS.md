@@ -35,6 +35,9 @@ run directory (`runs/<slug>/`) that shows them.
   message_board_read, complete), trace recording, post-episode interview.
 - `codrawing-run` (from `codrawing/cli.py`) — start an episode; `--seats 1`
   is the solo baseline.
+- `codrawing-versus` (same module) — the adversarial mode: two teams on one
+  canvas, one scored region each, sabotage allowed, higher FINAL score wins.
+  Teams live in `engine.Team`; the server scores each region separately.
 - `scripts/serve_runs.py` — home page of all runs at http://127.0.0.1:8600/.
 - `runs/<slug>/` — one directory per run: config, replay, results, per-seat
   `trace-<slot>.jsonl`, `report.html`. No database.

@@ -16,7 +16,7 @@ import uvicorn
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
 
-from codrawing.game.engine import PixelArtEngine, choose_target
+from codrawing.game.engine import PixelArtEngine, Team, choose_target
 from codrawing.game.image_model import TargetScorerRouter, scorer_from_environment
 
 
@@ -91,6 +91,7 @@ else:
 
 TOKENS = CONFIG.get("tokens", [])
 PLAYER_NAMES = [player["name"] for player in CONFIG.get("players", [])]
+TEAMS = [Team.from_config(payload) for payload in CONFIG.get("teams", [])]
 CONNECT_TIMEOUT = float(CONFIG.get("player_connect_timeout_seconds", 30))
 ACTION_TIMEOUT = float(CONFIG.get("action_timeout_seconds", 15))
 
@@ -112,6 +113,11 @@ class GameRuntime:
         self.image_model_feedback: dict[str, Any] | None = None
         self.image_model_score_trace: list[dict[str, Any]] = []
         self.round_scores: list[float] = []
+        # Adversarial play: one feedback stream per team, each scored from that
+        # team's own crop of the shared canvas.
+        self.team_feedback: list[dict[str, Any] | None] = [None] * len(TEAMS)
+        self.team_score_traces: list[list[dict[str, Any]]] = [[] for _ in TEAMS]
+        self.team_round_scores: list[list[float]] = [[] for _ in TEAMS]
         episode_seed = CONFIG.get("seed")
         if TOKENS and episode_seed is None:
             episode_seed = secrets.randbits(63)
@@ -121,20 +127,41 @@ class GameRuntime:
                 width=int(CONFIG["width"]),
                 height=int(CONFIG["height"]),
                 max_turns=int(CONFIG["max_turns"]),
-                target=choose_target(CONFIG["targets"], episode_seed),
+                target=(
+                    " vs ".join(team.target for team in TEAMS)
+                    if TEAMS
+                    else choose_target(CONFIG["targets"], episode_seed)
+                ),
                 player_names=PLAYER_NAMES,
                 turns_per_round=(
                     int(CONFIG["turns_per_round"]) if CONFIG.get("turns_per_round") else None
                 ),
+                teams=TEAMS or None,
             )
             if TOKENS
             else None
         )
-        if self.engine is not None and self.image_model is not None:
-            self.image_model_feedback = self._score_canvas()
-            self.image_model_score_trace.append(self.image_model_feedback)
 
-    def _score_canvas(self) -> dict[str, Any]:
+    async def score_initial_canvas(self) -> None:
+        if self.engine is not None and self.image_model is not None:
+            await self.score_canvas()
+
+    def _score_region(self, team_index: int) -> dict[str, Any]:
+        assert self.engine is not None
+        assert self.image_model is not None
+        team = self.engine.teams[team_index]
+        pixels, width, height = self.engine.region_canvas(team_index)
+        previous = self.team_feedback[team_index]
+        return self.image_model.score(
+            canvas=pixels,
+            width=width,
+            height=height,
+            target=team.target,
+            turn=self.engine.turn,
+            previous_score=float(previous["target_score"]) if previous is not None else None,
+        )
+
+    def _score_whole_canvas(self) -> dict[str, Any]:
         assert self.engine is not None
         assert self.image_model is not None
         previous_score = (
@@ -151,25 +178,72 @@ class GameRuntime:
             previous_score=previous_score,
         )
 
-    def score_canvas(self) -> None:
-        if self.image_model is None:
+    async def score_canvas(self) -> None:
+        """Score the canvas off the event loop; both teams are judged at once.
+
+        A VLM judge takes tens of seconds, which would otherwise stall every
+        player websocket while the turn is graded.
+        """
+        if self.image_model is None or self.engine is None:
+            return
+        if self.engine.teams:
+            scored = await asyncio.gather(
+                *(
+                    asyncio.to_thread(self._score_region, index)
+                    for index in range(len(self.engine.teams))
+                ),
+                return_exceptions=True,
+            )
+            for index, outcome in enumerate(scored):
+                if isinstance(outcome, BaseException):
+                    print(f"scorer failed for team {index} on turn {self.engine.turn}: {outcome!r}", flush=True)
+                    previous = self.team_feedback[index]
+                    if previous is None:
+                        continue
+                    # Stall the score rather than kill the episode.
+                    self.team_feedback[index] = {**previous, "score_delta": 0.0}
+                else:
+                    self.team_feedback[index] = outcome
+                feedback = self.team_feedback[index]
+                if feedback is not None:
+                    self.team_score_traces[index].append(feedback)
+            # Team 0 also fills the single-target field so any legacy viewer
+            # still draws a score line.
+            self.image_model_feedback = self.team_feedback[0]
             return
         try:
-            self.image_model_feedback = self._score_canvas()
+            self.image_model_feedback = await asyncio.to_thread(self._score_whole_canvas)
         except Exception as error:
             # A scorer failure must not kill the episode; keep the previous
             # feedback so agents see a stalled score instead of a dead game.
-            print(f"scorer failed on turn {self.engine.turn if self.engine else '?'}: {error!r}", flush=True)
+            print(f"scorer failed on turn {self.engine.turn}: {error!r}", flush=True)
             if self.image_model_feedback is None:
                 return
             self.image_model_feedback = {**self.image_model_feedback, "score_delta": 0.0}
         self.image_model_score_trace.append(self.image_model_feedback)
+
+    def team_feedback_payload(self) -> list[dict[str, Any]]:
+        assert self.engine is not None
+        payload = []
+        for index, team in enumerate(self.engine.teams):
+            feedback = self.team_feedback[index]
+            payload.append(
+                {
+                    "team": index,
+                    "name": team.name,
+                    "target": team.target,
+                    **(feedback.copy() if feedback is not None else {}),
+                }
+            )
+        return payload
 
     def snapshot(self, *, turn_messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         assert self.engine is not None
         snapshot = self.engine.snapshot(turn_messages=turn_messages)
         if self.image_model_feedback is not None:
             snapshot["image_model_feedback"] = self.image_model_feedback.copy()
+        if self.engine.teams:
+            snapshot["team_feedback"] = self.team_feedback_payload()
         snapshot["round_scores"] = self.round_scores.copy()
         return snapshot
 
@@ -265,9 +339,10 @@ async def player(websocket: WebSocket) -> None:
             if raw.get("turn") != engine.turn:
                 continue
             if raw.get("type") == "message":
-                # Live board post: visible to every seat immediately, outside
-                # the paint barrier.
-                if engine.post_message(slot, str(raw.get("text", ""))):
+                # Live board post: visible to its audience immediately, outside
+                # the paint barrier. In team play a post reaches only the
+                # sender's team unless it is explicitly public.
+                if engine.post_message(slot, str(raw.get("text", "")), bool(raw.get("public"))):
                     await _broadcast_board_update(engine.messages[-1])
                 continue
             if slot in runtime.pending_actions:
@@ -301,6 +376,8 @@ async def _play_game() -> None:
     assert runtime.engine is not None
     engine = runtime.engine
     await asyncio.sleep(0.2)
+    # Baseline score of the blank canvas, so turn 1 already has a delta.
+    await runtime.score_initial_canvas()
     while not engine.done:
         runtime.pending_actions = {}
         runtime.action_event.clear()
@@ -312,11 +389,13 @@ async def _play_game() -> None:
 
         resolution = engine.resolve(runtime.pending_actions)
         runtime.last_resolution = resolution
-        runtime.score_canvas()
-        if runtime.image_model_feedback is not None and (
-            engine.turn % engine.turns_per_round == 0 or engine.done
-        ):
-            runtime.round_scores.append(float(runtime.image_model_feedback["target_score"]))
+        await runtime.score_canvas()
+        if engine.turn % engine.turns_per_round == 0 or engine.done:
+            for index, feedback in enumerate(runtime.team_feedback):
+                if feedback is not None:
+                    runtime.team_round_scores[index].append(float(feedback["target_score"]))
+            if not engine.teams and runtime.image_model_feedback is not None:
+                runtime.round_scores.append(float(runtime.image_model_feedback["target_score"]))
         snapshot = runtime.snapshot(turn_messages=resolution["messages"])
         snapshot["accepted_slots"] = resolution["accepted_slots"]
         snapshot["collision_slots"] = resolution["collision_slots"]
@@ -324,7 +403,9 @@ async def _play_game() -> None:
         await _broadcast_globals(snapshot)
 
     results = engine.results()
-    if runtime.image_model_feedback is not None:
+    if engine.teams:
+        _finish_team_results(results, engine)
+    elif runtime.image_model_feedback is not None:
         # The team competes on the best classifier score reached within the
         # episode's turn budget, so a late regression cannot erase progress.
         best_score = max(
@@ -359,6 +440,45 @@ async def _play_game() -> None:
     server.should_exit = True
 
 
+def _finish_team_results(results: dict[str, Any], engine: PixelArtEngine) -> None:
+    """Decide the adversarial episode on the FINAL score of each team's region.
+
+    Best-ever is kept as a statistic only: if a peak could not be taken away,
+    erasing an opponent's pixels would be pointless and there would be no
+    reason to defend a drawing once it was good.
+    """
+    final_scores: list[float] = []
+    for index, team in enumerate(engine.teams):
+        feedback = runtime.team_feedback[index]
+        trace = runtime.team_score_traces[index]
+        final_score = float(feedback["target_score"]) if feedback is not None else 0.0
+        best_score = max((float(entry["target_score"]) for entry in trace), default=0.0)
+        final_scores.append(final_score)
+        results["teams"][index].update(
+            {
+                "final_score": final_score,
+                "best_score": best_score,
+                "round_scores": runtime.team_round_scores[index].copy(),
+                "score_trace": trace,
+                "final_feedback": feedback,
+                "pass_threshold": float(feedback["pass_threshold"]) if feedback else None,
+            }
+        )
+    if final_scores:
+        results["image_model"] = (runtime.team_feedback[0] or {}).get("model")
+    best = max(final_scores, default=0.0)
+    leaders = [index for index, score in enumerate(final_scores) if score == best]
+    results["winner"] = leaders[0] if len(leaders) == 1 else None
+    results["winner_name"] = engine.teams[leaders[0]].name if len(leaders) == 1 else "tie"
+    results["final_scores"] = final_scores
+
+    def seat_score(slot: int) -> float:
+        team = engine.team_of[slot]
+        return final_scores[team] if team is not None else 0.0
+
+    results["scores"] = [seat_score(slot) for slot in range(len(engine.player_names))]
+
+
 async def _broadcast_players(*, final: bool = False) -> None:
     assert runtime.engine is not None
     engine = runtime.engine
@@ -369,11 +489,13 @@ async def _broadcast_players(*, final: bool = False) -> None:
             {
                 "type": "final" if final else "observation",
                 "slot": slot,
-                "recent_messages": engine.messages[-25:],
+                "recent_messages": engine.messages_visible_to(slot)[-25:],
                 "previous_accepted_slots": runtime.last_resolution["accepted_slots"],
                 "previous_collision_slots": runtime.last_resolution["collision_slots"],
             }
         )
+        if engine.teams:
+            payload["your_team"] = engine.team_of[slot]
         try:
             await websocket.send_json(payload)
         except Exception:
@@ -384,12 +506,22 @@ async def _broadcast_players(*, final: bool = False) -> None:
 
 async def _broadcast_board_update(message: dict[str, Any]) -> None:
     payload = {"type": "board_update", "message": message.copy()}
-    for sockets in (list(runtime.players.values()), list(runtime.global_viewers)):
-        for websocket in sockets:
-            try:
-                await websocket.send_json(payload)
-            except Exception:
-                pass
+    engine = runtime.engine
+    for slot, websocket in list(runtime.players.items()):
+        # Team-scoped posts never reach the other side of the table.
+        if engine is not None and engine.teams and not message["public"]:
+            if engine.team_of[slot] != message["team"]:
+                continue
+        try:
+            await websocket.send_json(payload)
+        except Exception:
+            pass
+    # Viewers watch the whole episode, both teams included.
+    for websocket in list(runtime.global_viewers):
+        try:
+            await websocket.send_json(payload)
+        except Exception:
+            pass
 
 
 async def _broadcast_globals(snapshot: dict[str, Any]) -> None:
