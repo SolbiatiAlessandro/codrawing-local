@@ -308,6 +308,31 @@
     return count;
   }
 
+  // Sabotage: a write that landed inside the other team's scored region.
+  function regionAt(frame, x) {
+    return (frame.teams || []).findIndex(t => x >= t.region.x && x < t.region.x + t.region.width);
+  }
+  function teamOfSlot(frame, slot) {
+    return (frame.teams || []).findIndex(t => t.slots.includes(slot));
+  }
+  function isAttack(frame, owner, index) {
+    if (!(frame.teams || []).length || owner === undefined || owner < 0) return false;
+    const region = regionAt(frame, index % frame.width);
+    return region >= 0 && teamOfSlot(frame, owner) !== region;
+  }
+  // How many of a team's own squares are currently held by the other side.
+  function enemyPixelsIn(frame, teamIndex) {
+    const box = frame.teams[teamIndex].region;
+    let count = 0;
+    (frame.owners || []).forEach((owner, i) => {
+      const x = i % frame.width, y = Math.floor(i / frame.width);
+      if (owner < 0) return;
+      if (x < box.x || x >= box.x + box.width || y < box.y || y >= box.y + box.height) return;
+      if (teamOfSlot(frame, owner) !== teamIndex) count++;
+    });
+    return count;
+  }
+
   // Each team's scoreboard sits directly over the half it is scored on, and
   // the bar under them shows the gap as a tug of war.
   function renderTeamHeads(frame) {
@@ -330,9 +355,11 @@
       const score = '<span class="score">' + (100 * scores[k]).toFixed(0) + '%' +
         '<span class="delta" style="color:' + (delta >= 0 ? 'var(--good)' : 'var(--bad)') + '">' +
         (delta >= 0 ? '+' : '') + (100 * delta).toFixed(0) + '</span></span>';
+      const taken = enemyPixelsIn(frame, k);
       return '<div class="teamhead' + (k ? ' right' : '') + '" style="--team:' + TEAM_COLORS[k] + '">' +
         identity + score +
         '<span class="parts">' + regionPixelCount(frame, team.region) + ' pixels' +
+        (taken ? ' &middot; <b style="color:var(--bad)">' + taken + ' taken by the enemy</b>' : '') +
         (parts ? ' &middot; judge/clip ' + parts : '') + '</span></div>';
     }).join('');
 
@@ -422,15 +449,30 @@
       const x = i % frame.width, y = Math.floor(i / frame.width);
       boardCtx.strokeRect(x * cell + 1.5, y * cell + 1.5, cell - 2, cell - 2);
     }
+    // Squares held by the other side, marked wherever they are on the board:
+    // an erased one shows as a cross, since there is no pixel left to outline.
+    (frame.owners || []).forEach((owner, i) => {
+      if (!isAttack(frame, owner, i)) return;
+      const x = (i % frame.width) * cell, y = Math.floor(i / frame.width) * cell;
+      boardCtx.strokeStyle = '#B91C1C';
+      boardCtx.lineWidth = 1.6;
+      boardCtx.strokeRect(x + 1.5, y + 1.5, cell - 2, cell - 2);
+      if (frame.canvas[i] === WHITE) {
+        boardCtx.beginPath();
+        boardCtx.moveTo(x + 4, y + 4); boardCtx.lineTo(x + cell - 4, y + cell - 4);
+        boardCtx.moveTo(x + cell - 4, y + 4); boardCtx.lineTo(x + 4, y + cell - 4);
+        boardCtx.stroke();
+      }
+    });
     const acts = changed.map(i => {
       const owner = frame.owners ? frame.owners[i] : null;
       const who = owner === null || owner === undefined || owner < 0 ? 'someone' : 'agent ' + owner;
       const verb = frame.canvas[i] === WHITE ? 'erased' : 'painted';
-      const inside = teams.length === 2
-        ? (i % frame.width) < teams[1].region.x ? teams[0].name : teams[1].name
-        : null;
-      return who + ' ' + verb + ' (' + (i % frame.width) + ',' + Math.floor(i / frame.width) + ')' +
-        (inside ? ' in ' + inside : '');
+      const at = ' (' + (i % frame.width) + ',' + Math.floor(i / frame.width) + ')';
+      // Only call out the half when the write crossed into enemy ground.
+      return isAttack(frame, owner, i)
+        ? who + ' ' + verb + at + ' in ' + teams[regionAt(frame, i % frame.width)].name + "'s half"
+        : who + ' ' + verb + at;
     });
     document.querySelector('#lastaction').textContent =
       acts.length ? acts.join(' \u00b7 ') : 'no accepted writes this turn';

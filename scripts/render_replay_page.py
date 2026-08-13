@@ -105,6 +105,9 @@ h1 { font-size: 22px; font-weight: 700; margin: 4px 0 0; letter-spacing: 0.02em;
   font-size: calc(var(--cell, 20px) * 0.45); font-weight: 700; line-height: 1; user-select: none;
 }
 #board .c.changed { box-shadow: inset 0 0 0 2.5px var(--ink); }
+/* A pixel inside one team's region written by the other team. */
+#board .c.attack { box-shadow: inset 0 0 0 2.5px var(--bad); }
+#board .c.attack.erased::after { content: "\\00d7"; color: var(--bad); font-size: 11px; }
 /* The seam between the two scored halves of a versus canvas. */
 #board .c.seam { border-left: 2px solid var(--muted); }
 .halves { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; margin-bottom: 8px; }
@@ -260,6 +263,29 @@ TEAMS.forEach((t, i) => t.slots.forEach(s => { teamOf[s] = i; }));
 // the live viewer all say "agent 0".."agent 7", so the report must too.
 function seatName(slot) { return versus ? "Agent " + slot : (names[slot] || ("Agent " + slot)); }
 function cellLabel(owner) { return String(versus ? owner : owner + 1); }
+
+// Sabotage: a write that lands inside the other team's scored region. It is
+// the whole point of the adversarial rules, so it gets counted and marked.
+function regionAt(x) {
+  return TEAMS.findIndex(t => x >= t.region.x && x < t.region.x + t.region.width);
+}
+function isAttack(owner, index) {
+  if (!versus || owner === undefined || owner === null || owner < 0) return false;
+  const region = regionAt(index % W);
+  return region >= 0 && teamOf[owner] !== region;
+}
+function attacksMade() {
+  const made = TEAMS.map(() => 0);
+  if (!versus) return made;
+  for (let f = 1; f < frames.length; f++) {
+    for (let i = 0; i < W * H; i++) {
+      if (frames[f - 1].canvas[i] === frames[f].canvas[i]) continue;
+      const owner = frames[f].owners ? frames[f].owners[i] : -1;
+      if (isAttack(owner, i)) made[teamOf[owner]]++;
+    }
+  }
+  return made;
+}
 function teamScores(i) {
   return (frames[i].team_feedback || []).map(f => (f && f.target_score) || 0);
 }
@@ -330,6 +356,7 @@ const stats = versus
       ["turns", results.turns + "/" + (results.max_turns || frames[0].max_turns) +
         (results.ended_by_agents ? " \\u00b7 ended by agents" : ""), ""],
       ["pixels per team", (results.teams || []).map(t => t.accepted_pixels).join(" / "), ""],
+      ["attacks made", attacksMade().join(" / "), ""],
       ["best ever (stat only)", (results.teams || []).map(t => (t.best_score * 100).toFixed(1) + "%").join(" / "), ""],
     ]
   : [
@@ -394,6 +421,9 @@ function show(f) {
     const was = prev ? prev.canvas[i] : WHITE;
     const isChanged = was !== color;
     cells[i].classList.toggle("changed", isChanged);
+    const attacked = isAttack(owner, i);
+    cells[i].classList.toggle("attack", attacked);
+    cells[i].classList.toggle("erased", attacked && color === WHITE);
     if (isChanged) changed.push(i);
   }
   document.getElementById("turnlabel").textContent = "T" + frame.turn + "/" + frame.max_turns;
@@ -403,7 +433,10 @@ function show(f) {
     const owner = frame.owners ? frame.owners[i] : null;
     const who = owner === null || owner === undefined || owner < 0 ? "?" : seatName(owner);
     const verb = frame.canvas[i] === WHITE ? "erased" : "painted";
-    return who + " " + verb + " (" + (i % W) + "," + Math.floor(i / W) + ")";
+    const where = isAttack(owner, i)
+      ? " in " + TEAMS[regionAt(i % W)].name + "'s half"
+      : "";
+    return who + " " + verb + " (" + (i % W) + "," + Math.floor(i / W) + ")" + where;
   });
   document.getElementById("lastaction").textContent = acts.length ? acts.join(" \\u00b7 ") : "no accepted writes";
 

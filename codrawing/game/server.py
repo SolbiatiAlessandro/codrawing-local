@@ -94,6 +94,7 @@ PLAYER_NAMES = [player["name"] for player in CONFIG.get("players", [])]
 TEAMS = [Team.from_config(payload) for payload in CONFIG.get("teams", [])]
 CONNECT_TIMEOUT = float(CONFIG.get("player_connect_timeout_seconds", 30))
 ACTION_TIMEOUT = float(CONFIG.get("action_timeout_seconds", 15))
+CHECKPOINT_EVERY = int(CONFIG.get("checkpoint_every_turns", 5))
 
 
 class GameRuntime:
@@ -401,7 +402,19 @@ async def _play_game() -> None:
         snapshot["collision_slots"] = resolution["collision_slots"]
         runtime.frames.append(snapshot)
         await _broadcast_globals(snapshot)
+        # Checkpoint: a long episode that is killed part-way still leaves a
+        # readable replay and results for everything it played.
+        if engine.turn % CHECKPOINT_EVERY == 0 and not engine.done:
+            await asyncio.to_thread(_save_artifacts, _build_artifacts(engine))
 
+    _save_artifacts(_build_artifacts(engine))
+    runtime.finished = True
+    await _broadcast_players(final=True)
+    await asyncio.sleep(0.5)
+    server.should_exit = True
+
+
+def _build_artifacts(engine: PixelArtEngine) -> tuple[dict[str, Any], dict[str, Any]]:
     results = engine.results()
     if engine.teams:
         _finish_team_results(results, engine)
@@ -422,6 +435,11 @@ async def _play_game() -> None:
         results["final_image_model_feedback"] = runtime.image_model_feedback
         results["image_model_score_trace"] = runtime.image_model_score_trace
     replay = {"config": CONFIG, "frames": runtime.frames, "results": results}
+    return results, replay
+
+
+def _save_artifacts(artifacts: tuple[dict[str, Any], dict[str, Any]]) -> None:
+    results, replay = artifacts
     write_data(
         RESULTS_URI,
         json.dumps(results),
@@ -434,10 +452,6 @@ async def _play_game() -> None:
         content_type="application/json",
         http_method=artifact_method("COGAME_SAVE_REPLAY_METHOD"),
     )
-    runtime.finished = True
-    await _broadcast_players(final=True)
-    await asyncio.sleep(0.5)
-    server.should_exit = True
 
 
 def _finish_team_results(results: dict[str, Any], engine: PixelArtEngine) -> None:
