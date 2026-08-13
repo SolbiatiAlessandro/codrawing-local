@@ -5,203 +5,247 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>co/place</title>
   <style>
+    /* A match view, deliberately single-theme: a bright board on a dark table,
+       the way a broadcast overlay frames a game. Every colour is painted
+       explicitly so the page holds on any host background. */
     :root {
-      font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-      --paper: #FAF7F0; --card: #FFFFFF; --grid: #E9E3D6; --line: #D8D2C4;
-      --ink: #26221A; --muted: #7A7466; --accent: #B45309;
-      --good: #15803D; --bad: #B91C1C;
-      --teamA: #D97706; --teamB: #3B82F6;
+      --ground: #0B0F14;
+      --table: #121821;
+      --panel: #171E28;
+      --raised: #1E2632;
+      --line: #2A3441;
+      --ink: #E7EDF5;
+      --muted: #8798AB;
+      --teamA: #F5A524;
+      --teamB: #38BDF8;
+      --danger: #FB5D75;
+      --good: #3DDC97;
+      --board: #F7F4EC;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { margin: 0; background: var(--paper); color: var(--ink); overflow: hidden; }
+    body {
+      margin: 0; background: var(--ground); color: var(--ink);
+      font-family: var(--sans); overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
     main {
-      height: 100vh; display: grid; grid-template-rows: auto 1fr auto;
-      padding: 10px 14px 12px; gap: 8px; max-width: 1760px; margin: 0 auto;
+      height: 100vh; max-width: 1920px; margin: 0 auto; padding: 10px 16px 12px;
+      display: grid; grid-template-rows: auto auto 1fr auto; gap: 10px;
     }
 
-    header { display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: baseline; }
-    header h1 { font-size: 19px; margin: 0; letter-spacing: 0.01em; }
-    header .sub { color: var(--muted); font-size: 12.5px; }
-    header .rule {
-      margin-left: auto; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-      color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+    /* ---------- HUD ---------- */
+    .hud {
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch;
     }
-    #feedback { font-size: 12.5px; color: var(--muted); width: 100%; }
-    #feedback .pass { color: var(--good); font-weight: 700; }
-    #feedback .fail { color: var(--bad); font-weight: 700; }
-
-    /* Two squads facing each other across the canvas. */
-    .arena { display: grid; grid-template-columns: 186px minmax(0, 1fr) 186px; gap: 12px; min-height: 0; }
-    .arena.solo { grid-template-columns: minmax(0, 1fr) 340px; }
-    .arena.solo .squad.right { display: none; }
-
-    .squad { display: flex; flex-direction: column; min-height: 0; gap: 6px; }
-    .squadname {
-      font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-      display: flex; align-items: center; gap: 7px; padding-bottom: 5px;
-      border-bottom: 2px solid currentColor;
-    }
-    .squad.left .squadname { color: var(--teamA); }
-    .squad.right .squadname { color: var(--teamB); justify-content: flex-end; }
-    .squadbody {
-      display: grid; grid-auto-rows: minmax(54px, auto); gap: 8px; align-content: start;
-      min-height: 0; flex: 1; overflow-y: auto; padding-top: 2px;
-    }
-    .robotrow { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 4px; align-items: center; min-height: 0; }
-    .squad.right .robotrow { grid-template-columns: minmax(0, 1fr) 52px; }
-    .squad.right .robotrow svg { order: 2; }
-    .robotrow svg { width: 48px; height: 48px; display: block; margin: 0 auto; }
-    .bubble {
-      position: relative; background: var(--card); border: 1.5px solid var(--ink);
-      border-radius: 10px; padding: 6px 9px; font-size: 11px; line-height: 1.45;
-      max-height: 132px; overflow-y: auto; min-height: 0;
-      scrollbar-width: thin;
-    }
-    .bubble::before {
-      content: ""; position: absolute; left: -7px; top: 18px; width: 11px; height: 11px;
-      background: var(--card); border-left: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink);
-      transform: rotate(45deg);
-    }
-    .squad.right .bubble::before {
-      left: auto; right: -7px;
-      border-left: none; border-bottom: none;
-      border-right: 1.5px solid var(--ink); border-top: 1.5px solid var(--ink);
-    }
-    .bubble.quiet { border-color: var(--line); color: #A8A193; }
-    .bubble.quiet::before { border-color: var(--line); }
-    /* Said on an earlier turn: still the agent's current position, just older. */
-    .bubble.stale { border-color: var(--line); opacity: 0.6; }
-    .bubble.stale::before { border-color: var(--line); }
-    .bubble .say { display: block; }
-    .seat { font-weight: 700; letter-spacing: 0.06em; }
-    .when { color: var(--muted); font-weight: 400; }
-
-    /* The board is the hero: everything else is sized so the canvas stays the
-       biggest thing on screen, and the table centres in the row. */
-    .stage { display: flex; flex-direction: column; min-height: 0; justify-content: center; gap: 0; }
-    .table { margin: 0 auto; max-width: 100%; display: flex; flex-direction: column; }
-
-    /* Two scoreboards, each sitting over the half it scores. */
-    .teamheads { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
-    .teamhead {
+    .side {
       --team: var(--line);
-      background: var(--card); border: 1px solid var(--line);
-      border-top: 4px solid var(--team); border-radius: 8px 8px 0 0;
-      padding: 9px 14px 8px; display: grid; gap: 2px 10px; min-width: 0;
-      grid-template-columns: 1fr auto; align-items: baseline;
+      background: linear-gradient(180deg, var(--panel), var(--table));
+      border: 1px solid var(--line); border-top: 3px solid var(--team);
+      border-radius: 10px; padding: 10px 16px;
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 14px;
+      min-width: 0;
     }
-    .teamhead.right { text-align: right; grid-template-columns: auto 1fr; }
-    .teamhead.right .id { order: 2; justify-self: end; }
-    .teamhead.right .score { order: 1; justify-self: start; }
-    .teamhead.right .parts { order: 3; }
-    .id { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
-    .teamhead.right .id { flex-direction: row-reverse; }
-    .id .who { font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--team); }
-    .id .what { font-size: 13px; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .id .lead {
-      font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-      color: var(--card); background: var(--good); border-radius: 999px; padding: 2px 8px; flex: none;
+    .side.b { grid-template-columns: auto 1fr; text-align: right; }
+    .side.b .who { order: 2; }
+    .side.b .score { order: 1; }
+    .side.b .tags { order: 3; justify-content: flex-end; }
+    .who { min-width: 0; }
+    .who .nm {
+      font-size: 15px; font-weight: 800; letter-spacing: 0.18em; color: var(--team);
+      text-transform: uppercase;
     }
-    .score { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; color: var(--team); }
-    .score .delta { font-size: 12px; font-weight: 700; margin-left: 5px; }
-    .parts { grid-column: 1 / -1; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .who .tg {
+      font-size: 15px; font-weight: 600; color: var(--ink); margin-top: 1px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .score {
+      font-family: var(--mono); font-size: 44px; font-weight: 700; line-height: 0.9;
+      font-variant-numeric: tabular-nums; color: var(--team); letter-spacing: -0.02em;
+    }
+    .score .pct { font-size: 18px; opacity: 0.65; }
+    .score .dl { display: block; font-size: 12px; font-weight: 700; margin-top: 3px; }
+    .tags { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+    .chip {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted); background: var(--raised); border: 1px solid var(--line);
+      border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+    }
+    .chip.hit { color: var(--danger); border-color: var(--danger); }
+    .chip.win { color: var(--ground); background: var(--good); border-color: var(--good); }
 
-    /* Tug of war: the gap between the two scores, at a glance. */
-    .leadbar { display: flex; height: 6px; background: var(--grid); overflow: hidden; }
-    .leadbar i { display: block; transition: width 0.25s ease; }
+    .center {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; padding: 0 4px; min-width: 132px;
+    }
+    .vs {
+      font-size: 20px; font-weight: 800; letter-spacing: 0.12em; color: var(--muted);
+      border: 2px solid var(--line); border-radius: 999px; padding: 3px 14px;
+    }
+    .clock { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: 0.08em; }
+    .clock b { color: var(--ink); font-size: 15px; }
+    .live {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--danger);
+    }
+    .live.replay { color: var(--muted); }
+    .rule { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 
-    .boardpane {
-      display: flex; flex-direction: column; min-height: 0; background: var(--card);
-      border: 1px solid var(--line); border-top: none; border-radius: 0 0 8px 8px;
-      padding: 10px 12px 10px; box-shadow: 0 1px 3px rgba(38, 34, 26, 0.06);
+    /* Tug of war between the two scores. */
+    .tug { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--line); }
+    .tug i { display: block; transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+
+    /* ---------- arena ---------- */
+    .arena { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 10px; min-height: 0; }
+    .arena.solo { grid-template-columns: minmax(0, 1fr) 300px; }
+    .arena.solo .roster.right { display: none; }
+    .roster { display: flex; flex-direction: column; gap: 7px; min-height: 0; overflow-y: auto; }
+    .rostername {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--team, var(--muted)); padding-bottom: 2px;
     }
-    .boardbox { flex: none; display: flex; align-items: center; justify-content: center; }
-    canvas#board { display: block; border: 1px solid var(--line); }
-    #lastaction {
-      font-size: 11px; color: var(--muted); border-top: 1px solid var(--grid);
-      padding-top: 6px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    .roster.right .rostername { text-align: right; }
+
+    .pc {
+      background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--seat, var(--line));
+      border-radius: 8px; padding: 7px 9px; display: grid; grid-template-columns: 30px 1fr; gap: 8px;
+      min-width: 0;
     }
-    .chart { flex: none; height: 112px; display: flex; flex-direction: column; margin-top: 6px; }
+    .roster.right .pc { border-left: 1px solid var(--line); border-right: 3px solid var(--seat, var(--line)); }
+    .pc.acted { background: var(--raised); }
+    .pc svg { width: 30px; height: 30px; display: block; align-self: start; }
+    .pcmain { min-width: 0; }
+    .pchead { display: flex; align-items: baseline; gap: 6px; }
+    .pcname {
+      font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--seat, var(--ink));
+      letter-spacing: 0.04em;
+    }
+    .pcstat { font-family: var(--mono); font-size: 9.5px; color: var(--muted); margin-left: auto; }
+    .pcstat .atk { color: var(--danger); }
+    .pcsay {
+      font-size: 11px; line-height: 1.4; color: var(--ink); margin-top: 3px;
+      max-height: 74px; overflow-y: auto; overflow-wrap: anywhere;
+    }
+    .pcsay.old { color: var(--muted); }
+    .pcsay .stamp { color: var(--muted); font-family: var(--mono); font-size: 9.5px; }
+
+    .stage {
+      background: var(--table); border: 1px solid var(--line); border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; min-height: 0; padding: 10px;
+      position: relative;
+    }
+    canvas#board {
+      display: block; background: var(--board); border-radius: 4px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
+    }
+    .banner {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+    /* display:flex would otherwise beat the UA rule for [hidden]. */
+    .banner[hidden] { display: none; }
+    .banner span {
+      font-size: 34px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+      color: var(--ground); background: var(--win, var(--good));
+      padding: 12px 34px; border-radius: 8px; transform: rotate(-3deg);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+    }
+
+    /* ---------- footer ---------- */
+    .footer { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 34%); gap: 12px; }
+    .feed {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+      padding: 8px 12px; height: 104px; overflow-y: auto;
+      font-family: var(--mono); font-size: 11px; line-height: 1.6;
+    }
+    .ev { display: flex; gap: 8px; align-items: baseline; }
+    .ev .t { color: var(--muted); flex: none; }
+    .ev .tag {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.1em; padding: 0 5px; border-radius: 3px;
+      flex: none; color: var(--ground);
+    }
+    .ev.raid .tag { background: var(--danger); }
+    .ev.raid { color: var(--danger); }
+    .ev .txt { color: var(--ink); }
+    .ev.raid .txt { color: var(--danger); }
+    .chartbox {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+      padding: 6px 10px 4px; height: 104px; display: flex; flex-direction: column;
+    }
     .chartname {
-      font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
-      display: flex; justify-content: space-between;
+      font-size: 9px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); display: flex; justify-content: space-between;
     }
-    #spark { width: 100%; flex: 1; min-height: 50px; display: block; }
+    #spark { width: 100%; flex: 1; display: block; min-height: 0; }
 
     .controls { display: flex; gap: 10px; align-items: center; }
     .controls button {
-      font: inherit; color: var(--ink); background: var(--card);
-      border: 1px solid var(--line); border-radius: 4px; padding: 4px 14px; cursor: pointer;
+      font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+      color: var(--ink); background: var(--raised); border: 1px solid var(--line);
+      border-radius: 6px; padding: 6px 16px; cursor: pointer;
     }
     .controls button:hover { border-color: var(--muted); }
-    .controls input[type="range"] { flex: 1; accent-color: var(--accent); }
-    .turnlabel { min-width: 90px; text-align: right; font-size: 12.5px; }
-    #status { color: var(--muted); font-size: 12px; }
+    .controls input[type="range"] { flex: 1; accent-color: var(--teamA); }
+    .framelabel { font-family: var(--mono); font-size: 11px; color: var(--muted); min-width: 96px; text-align: right; }
 
-    @media (max-width: 1100px) {
+    @media (max-width: 1180px) {
       body { overflow: auto; }
       main { height: auto; }
       .arena, .arena.solo { grid-template-columns: 1fr; }
-      .arena.solo .squad.right { display: flex; }
-      .squad.right .robotrow { grid-template-columns: 52px minmax(0, 1fr); }
-      .squad.right .robotrow svg { order: 0; }
-      .squad.right .bubble::before {
-        left: -7px; right: auto;
-        border-left: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink);
-        border-right: none; border-top: none;
-      }
-      .squad.right .squadname { justify-content: flex-start; }
+      .arena.solo .roster.right { display: flex; }
+      .footer { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 <main>
-  <header>
-    <h1>co/place</h1>
-    <span class="sub"><span id="targetline">Target: <strong id="target">&mdash;</strong> &middot; </span><span id="roundlabel"></span>Turn <span id="turn">0</span>/<span id="max-turns">0</span> &middot; <span id="status">Connecting&hellip;</span></span>
-    <span class="rule" id="rule" hidden>the final turn decides the winner</span>
-    <div id="feedback">waiting for classifier&hellip;</div>
-  </header>
+  <div class="hud">
+    <div class="side a" id="side-a">
+      <div class="who"><div class="nm">Agents</div><div class="tg" id="solo-target">&mdash;</div></div>
+      <div class="score" id="solo-score">&mdash;</div>
+      <div class="tags" id="solo-tags"></div>
+    </div>
+    <div class="center">
+      <div class="clock">TURN <b id="turn">0</b> / <span id="max-turns">0</span></div>
+      <div class="vs" id="vs">VS</div>
+      <div class="live" id="status">Connecting</div>
+      <div class="rule" id="rule" hidden>final turn decides</div>
+    </div>
+    <div class="side b" id="side-b" hidden></div>
+  </div>
+
+  <div class="tug" id="tug" hidden><i id="tug-a"></i><i id="tug-b"></i></div>
 
   <div class="arena" id="arena">
-    <section class="squad left" id="squad-left">
-      <div class="squadname" id="squadname-left">Agents</div>
-      <div class="squadbody" id="squadbody-left"></div>
-    </section>
-
+    <aside class="roster left" id="roster-left"><div class="rostername" id="rostername-left"></div></aside>
     <section class="stage">
-      <div class="table" id="table">
-        <div class="teamheads" id="teamheads" hidden></div>
-        <div class="leadbar" id="leadbar" hidden><i id="leadA"></i><i id="leadB"></i></div>
-        <section class="boardpane">
-          <div class="boardbox"><canvas id="board"></canvas></div>
-          <div id="lastaction">&mdash;</div>
-          <div class="chart">
-            <div class="chartname"><span>Score by turn</span><span id="charthint"></span></div>
-            <canvas id="spark"></canvas>
-          </div>
-        </section>
-      </div>
+      <canvas id="board"></canvas>
+      <div class="banner" id="banner" hidden><span id="banner-text"></span></div>
     </section>
+    <aside class="roster right" id="roster-right"><div class="rostername" id="rostername-right"></div></aside>
+  </div>
 
-    <section class="squad right" id="squad-right">
-      <div class="squadname" id="squadname-right">Team B</div>
-      <div class="squadbody" id="squadbody-right"></div>
-    </section>
+  <div class="footer">
+    <div class="feed" id="feed"></div>
+    <div class="chartbox">
+      <div class="chartname"><span>Score by turn</span><span id="charthint"></span></div>
+      <canvas id="spark"></canvas>
+    </div>
   </div>
 
   <div class="controls">
     <button id="play">Pause</button>
     <input type="range" id="timeline" min="0" max="0" value="0">
-    <span class="turnlabel" id="framelabel"></span>
+    <span class="framelabel" id="framelabel"></span>
     <button id="download">PNG</button>
   </div>
 </main>
 <script>
-  const SEAT_COLORS = ['#EF4444', '#3B82F6', '#22C55E', '#F59E0B', '#A855F7',
-                       '#EC4899', '#14B8A6', '#84CC16', '#6366F1', '#F97316'];
-  const TEAM_COLORS = ['#D97706', '#3B82F6'];
+  const SEAT_COLORS = ['#FB7185', '#60A5FA', '#4ADE80', '#FBBF24', '#C084FC',
+                       '#F472B6', '#2DD4BF', '#A3E635', '#818CF8', '#FB923C'];
+  const TEAM_COLORS = ['#F5A524', '#38BDF8'];
   const WHITE = '#FFFFFF';
   const board = document.querySelector('#board');
   const boardCtx = board.getContext('2d');
@@ -211,104 +255,26 @@
   const playButton = document.querySelector('#play');
   let frames = [], frameIndex = 0, playing = true, timer = null;
   let liveScores = [];
-  let seatLayout = null;   // {left: [slots], right: [slots], versus: bool}
+  let seatLayout = null;
 
   function esc(value) {
     const node = document.createElement('div'); node.textContent = value; return node.innerHTML;
   }
 
-  function robotSvg(color, index) {
-    return '<svg viewBox="0 0 64 64" aria-label="robot seat ' + index + '">' +
-      '<line x1="32" y1="10" x2="32" y2="4" stroke="#26221A" stroke-width="2"/>' +
-      '<circle cx="32" cy="4" r="2.6" fill="' + color + '" stroke="#26221A" stroke-width="1.4"/>' +
-      '<rect x="14" y="10" width="36" height="26" rx="7" fill="' + color + '" stroke="#26221A" stroke-width="2"/>' +
-      '<circle cx="25" cy="22" r="5" fill="#FFFFFF" stroke="#26221A" stroke-width="1.6"/>' +
-      '<circle cx="39" cy="22" r="5" fill="#FFFFFF" stroke="#26221A" stroke-width="1.6"/>' +
-      '<circle cx="25.8" cy="22.8" r="1.9" fill="#26221A"/>' +
-      '<circle cx="39.8" cy="22.8" r="1.9" fill="#26221A"/>' +
-      '<rect x="25" y="29" width="14" height="2.6" rx="1.3" fill="#26221A"/>' +
-      '<rect x="10" y="20" width="4" height="8" rx="2" fill="' + color + '" stroke="#26221A" stroke-width="1.4"/>' +
-      '<rect x="50" y="20" width="4" height="8" rx="2" fill="' + color + '" stroke="#26221A" stroke-width="1.4"/>' +
-      '<rect x="20" y="38" width="24" height="16" rx="4" fill="' + color + '" stroke="#26221A" stroke-width="2"/>' +
-      '<rect x="27" y="42" width="10" height="5" rx="1.5" fill="#FFFFFF" stroke="#26221A" stroke-width="1.2"/>' +
-      '<rect x="24" y="56" width="6" height="5" rx="1.5" fill="#26221A"/>' +
-      '<rect x="34" y="56" width="6" height="5" rx="1.5" fill="#26221A"/>' +
+  function robotSvg(color) {
+    return '<svg viewBox="0 0 64 64" aria-hidden="true">' +
+      '<line x1="32" y1="10" x2="32" y2="4" stroke="#0B0F14" stroke-width="3"/>' +
+      '<circle cx="32" cy="4" r="3" fill="' + color + '"/>' +
+      '<rect x="12" y="10" width="40" height="28" rx="8" fill="' + color + '"/>' +
+      '<circle cx="24" cy="23" r="5.5" fill="#0B0F14"/>' +
+      '<circle cx="40" cy="23" r="5.5" fill="#0B0F14"/>' +
+      '<circle cx="25.5" cy="21.5" r="1.8" fill="#FFFFFF"/>' +
+      '<circle cx="41.5" cy="21.5" r="1.8" fill="#FFFFFF"/>' +
+      '<rect x="19" y="42" width="26" height="16" rx="5" fill="' + color + '" opacity="0.75"/>' +
       '</svg>';
   }
 
-  function seatRow(slot) {
-    return '<div class="robotrow">' + robotSvg(SEAT_COLORS[slot % SEAT_COLORS.length], slot) +
-      '<div class="bubble quiet" id="bubble-' + slot + '"><span class="say">&hellip;</span></div></div>';
-  }
-
-  // One squad per side of the canvas, each seated in front of the half it draws.
-  function layoutSeats(frame) {
-    const teams = frame.teams || [];
-    const count = (frame.player_names || []).length || 5;
-    const next = teams.length === 2
-      ? { versus: true, left: teams[0].slots.slice(), right: teams[1].slots.slice(),
-          names: [teams[0].name, teams[1].name] }
-      : { versus: false, left: Array.from({ length: count }, (_, i) => i), right: [], names: [] };
-    const same = seatLayout &&
-      seatLayout.versus === next.versus &&
-      String(seatLayout.left) === String(next.left) &&
-      String(seatLayout.right) === String(next.right);
-    if (same) return;
-    seatLayout = next;
-    document.querySelector('#arena').classList.toggle('solo', !next.versus);
-    document.querySelector('#squadbody-left').innerHTML = next.left.map(seatRow).join('');
-    document.querySelector('#squadbody-right').innerHTML = next.right.map(seatRow).join('');
-    document.querySelector('#squadname-left').textContent = next.versus ? next.names[0] : 'Agents';
-    document.querySelector('#squadname-right').textContent = next.versus ? next.names[1] : '';
-    document.querySelector('#targetline').hidden = next.versus;
-    document.querySelector('#rule').hidden = !next.versus;
-    document.querySelector('#feedback').hidden = next.versus;
-    document.querySelector('#teamheads').hidden = !next.versus;
-  }
-
-  // What each agent said most recently at this point in the episode. A team
-  // can go quiet for several turns, and eight empty bubbles say nothing about
-  // the match; the last thing an agent said is still its stated position.
-  const liveSaid = {};
-  function latestSaid(index) {
-    if (!frames.length || index === undefined) return liveSaid;
-    const said = {};
-    for (let i = 0; i <= index; i++) {
-      for (const m of frames[i].messages || []) {
-        said[m.slot] = { text: m.text, turn: frames[i].turn };
-      }
-    }
-    return said;
-  }
-
-  function renderBubbles(frame, index) {
-    const said = latestSaid(index);
-    for (const slot of [...seatLayout.left, ...seatLayout.right]) {
-      const bubble = document.querySelector('#bubble-' + slot);
-      if (!bubble) continue;
-      const entry = said[slot];
-      const fresh = entry && entry.turn === frame.turn;
-      const label = '<span class="seat" style="color:' + SEAT_COLORS[slot % SEAT_COLORS.length] +
-        '">A' + slot + '</span> ' +
-        (entry && !fresh ? '<span class="when">T' + entry.turn + '</span> ' : '');
-      bubble.classList.toggle('quiet', !entry);
-      bubble.classList.toggle('stale', Boolean(entry) && !fresh);
-      bubble.innerHTML = '<span class="say">' + label +
-        (entry ? esc(entry.text) : 'has not spoken yet') + '</span>';
-      if (fresh) bubble.scrollTop = 0;
-    }
-  }
-
-  function regionPixelCount(frame, box) {
-    let count = 0;
-    frame.canvas.forEach((color, i) => {
-      const x = i % frame.width, y = Math.floor(i / frame.width);
-      if (color !== WHITE && x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height) count++;
-    });
-    return count;
-  }
-
-  // Sabotage: a write that landed inside the other team's scored region.
+  /* ---------- geometry helpers ---------- */
   function regionAt(frame, x) {
     return (frame.teams || []).findIndex(t => x >= t.region.x && x < t.region.x + t.region.width);
   }
@@ -320,7 +286,14 @@
     const region = regionAt(frame, index % frame.width);
     return region >= 0 && teamOfSlot(frame, owner) !== region;
   }
-  // How many of a team's own squares are currently held by the other side.
+  function regionPixelCount(frame, box) {
+    let count = 0;
+    frame.canvas.forEach((color, i) => {
+      const x = i % frame.width, y = Math.floor(i / frame.width);
+      if (color !== WHITE && x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height) count++;
+    });
+    return count;
+  }
   function enemyPixelsIn(frame, teamIndex) {
     const box = frame.teams[teamIndex].region;
     let count = 0;
@@ -333,81 +306,180 @@
     return count;
   }
 
-  // Each team's scoreboard sits directly over the half it is scored on, and
-  // the bar under them shows the gap as a tug of war.
-  function renderTeamHeads(frame) {
-    const feedback = frame.team_feedback || [];
+  /* ---------- roster ---------- */
+  function seatCard(slot) {
+    return '<div class="pc" id="pc-' + slot + '" style="--seat:' + SEAT_COLORS[slot % SEAT_COLORS.length] + '">' +
+      robotSvg(SEAT_COLORS[slot % SEAT_COLORS.length]) +
+      '<div class="pcmain"><div class="pchead"><span class="pcname">AGENT ' + slot + '</span>' +
+      '<span class="pcstat" id="pcstat-' + slot + '"></span></div>' +
+      '<div class="pcsay" id="pcsay-' + slot + '">&hellip;</div></div></div>';
+  }
+
+  function layoutSeats(frame) {
     const teams = frame.teams || [];
-    if (!seatLayout.versus || !teams.length) return;
+    const count = (frame.player_names || []).length || 5;
+    const next = teams.length === 2
+      ? { versus: true, left: teams[0].slots.slice(), right: teams[1].slots.slice() }
+      : { versus: false, left: Array.from({ length: count }, (_, i) => i), right: [] };
+    const same = seatLayout && seatLayout.versus === next.versus &&
+      String(seatLayout.left) === String(next.left) && String(seatLayout.right) === String(next.right);
+    if (same) return;
+    seatLayout = next;
+    document.querySelector('#arena').classList.toggle('solo', !next.versus);
+    const left = document.querySelector('#roster-left');
+    const right = document.querySelector('#roster-right');
+    left.innerHTML = '<div class="rostername" id="rostername-left"></div>' + next.left.map(seatCard).join('');
+    right.innerHTML = '<div class="rostername" id="rostername-right"></div>' + next.right.map(seatCard).join('');
+    if (next.versus) {
+      left.style.setProperty('--team', TEAM_COLORS[0]);
+      right.style.setProperty('--team', TEAM_COLORS[1]);
+      document.querySelector('#rostername-left').textContent = teams[0].name;
+      document.querySelector('#rostername-right').textContent = teams[1].name;
+      document.querySelector('#side-b').hidden = false;
+      document.querySelector('#rule').hidden = false;
+      document.querySelector('#tug').hidden = false;
+    } else {
+      document.querySelector('#rostername-left').textContent = 'Agents';
+    }
+  }
+
+  /* ---------- what each agent last said, and what it has done ---------- */
+  const liveSaid = {};
+  function latestSaid(index) {
+    if (!frames.length || index === undefined) return liveSaid;
+    const said = {};
+    for (let i = 0; i <= index; i++) {
+      for (const m of frames[i].messages || []) said[m.slot] = { text: m.text, turn: frames[i].turn };
+    }
+    return said;
+  }
+  function attacksBySlot(index) {
+    const made = {};
+    const upto = index === undefined ? frames.length - 1 : index;
+    for (let f = 1; f <= upto && f < frames.length; f++) {
+      const cur = frames[f], prev = frames[f - 1];
+      for (let i = 0; i < cur.canvas.length; i++) {
+        if (prev.canvas[i] === cur.canvas[i]) continue;
+        const owner = cur.owners ? cur.owners[i] : -1;
+        if (isAttack(cur, owner, i)) made[owner] = (made[owner] || 0) + 1;
+      }
+    }
+    return made;
+  }
+
+  function renderRoster(frame, index) {
+    const said = latestSaid(index);
+    const raids = frames.length ? attacksBySlot(index) : {};
+    const acted = new Set(frame.accepted_slots || []);
+    for (const slot of [...seatLayout.left, ...seatLayout.right]) {
+      const card = document.querySelector('#pc-' + slot);
+      if (!card) continue;
+      card.classList.toggle('acted', acted.has(slot));
+      const pixels = (frame.accepted_pixels || [])[slot];
+      const raid = raids[slot] || 0;
+      document.querySelector('#pcstat-' + slot).innerHTML =
+        (pixels === undefined ? '' : pixels + ' px') +
+        (raid ? ' <span class="atk">' + raid + ' raid</span>' : '');
+      const say = document.querySelector('#pcsay-' + slot);
+      const entry = said[slot];
+      const fresh = entry && entry.turn === frame.turn;
+      say.classList.toggle('old', Boolean(entry) && !fresh);
+      say.innerHTML = entry
+        ? (fresh ? '' : '<span class="stamp">T' + entry.turn + '</span> ') + esc(entry.text)
+        : 'has not spoken yet';
+    }
+  }
+
+  /* ---------- HUD ---------- */
+  function renderHud(frame) {
+    const teams = frame.teams || [];
+    document.querySelector('#turn').textContent = frame.turn;
+    document.querySelector('#max-turns').textContent = frame.max_turns;
+    if (!teams.length) {
+      const fb = frame.image_model_feedback;
+      document.querySelector('#side-a').style.setProperty('--team', TEAM_COLORS[0]);
+      document.querySelector('#solo-target').textContent = frame.target;
+      document.querySelector('#solo-score').innerHTML = fb
+        ? (100 * fb.target_score).toFixed(0) + '<span class="pct">%</span>'
+        : '&mdash;';
+      document.querySelector('#solo-tags').innerHTML = fb
+        ? '<span class="chip">' + esc(fb.model || '') + '</span>' +
+          '<span class="chip">need &gt;' + (100 * fb.pass_threshold).toFixed(0) + '%</span>'
+        : '';
+      document.querySelector('#vs').textContent = 'SOLO';
+      return;
+    }
+    const feedback = frame.team_feedback || [];
     const scores = teams.map((_, k) => (feedback[k] || {}).target_score || 0);
     const best = Math.max(...scores);
-    document.querySelector('#teamheads').innerHTML = teams.map((team, k) => {
+    // Only the engine's own end-of-episode flag: scrubbing to the last frame
+    // of a checkpointed run must not crown a winner mid-game.
+    const done = Boolean(frame.done);
+    teams.forEach((team, k) => {
+      const side = document.querySelector(k ? '#side-b' : '#side-a');
       const f = feedback[k] || {};
       const delta = f.score_delta || 0;
       const parts = f.components
         ? Object.entries(f.components).map(([n, v]) => n + ' ' + (100 * v).toFixed(0)).join(' / ')
         : '';
-      const identity = '<span class="id">' +
-        '<span class="who">' + esc(team.name) + '</span>' +
-        '<span class="what">' + esc(team.target) + '</span>' +
-        (scores[k] === best && best > 0 ? '<span class="lead">leading</span>' : '') +
-        '</span>';
-      const score = '<span class="score">' + (100 * scores[k]).toFixed(0) + '%' +
-        '<span class="delta" style="color:' + (delta >= 0 ? 'var(--good)' : 'var(--bad)') + '">' +
-        (delta >= 0 ? '+' : '') + (100 * delta).toFixed(0) + '</span></span>';
       const taken = enemyPixelsIn(frame, k);
-      return '<div class="teamhead' + (k ? ' right' : '') + '" style="--team:' + TEAM_COLORS[k] + '">' +
-        identity + score +
-        '<span class="parts">' + regionPixelCount(frame, team.region) + ' pixels' +
-        (taken ? ' &middot; <b style="color:var(--bad)">' + taken + ' taken by the enemy</b>' : '') +
-        (parts ? ' &middot; judge/clip ' + parts : '') + '</span></div>';
-    }).join('');
-
+      side.style.setProperty('--team', TEAM_COLORS[k]);
+      side.innerHTML =
+        '<div class="who"><div class="nm">' + esc(team.name) + '</div>' +
+        '<div class="tg">' + esc(team.target) + '</div></div>' +
+        '<div class="score">' + (100 * scores[k]).toFixed(0) + '<span class="pct">%</span>' +
+        '<span class="dl" style="color:' + (delta >= 0 ? 'var(--good)' : 'var(--danger)') + '">' +
+        (delta >= 0 ? '+' : '') + (100 * delta).toFixed(0) + '</span></div>' +
+        '<div class="tags">' +
+        (scores[k] === best && best > 0
+          ? '<span class="chip win">' + (done ? 'winner' : 'leading') + '</span>' : '') +
+        '<span class="chip">' + regionPixelCount(frame, team.region) + ' px</span>' +
+        (taken ? '<span class="chip hit">' + taken + ' taken</span>' : '') +
+        (parts ? '<span class="chip">' + parts + '</span>' : '') +
+        '</div>';
+    });
     const total = scores[0] + scores[1];
     const share = total > 0 ? (scores[0] / total) * 100 : 50;
-    const bar = document.querySelector('#leadbar');
-    bar.hidden = false;
-    document.querySelector('#leadA').style.cssText =
-      'width:' + share + '%;background:' + TEAM_COLORS[0];
-    document.querySelector('#leadB').style.cssText =
-      'width:' + (100 - share) + '%;background:' + TEAM_COLORS[1];
+    document.querySelector('#tug-a').style.cssText = 'width:' + share + '%;background:' + TEAM_COLORS[0];
+    document.querySelector('#tug-b').style.cssText = 'width:' + (100 - share) + '%;background:' + TEAM_COLORS[1];
+
+    const banner = document.querySelector('#banner');
+    if (done && best > 0) {
+      const winner = scores[0] === scores[1] ? null : (scores[0] > scores[1] ? 0 : 1);
+      banner.hidden = false;
+      banner.style.setProperty('--win', winner === null ? 'var(--muted)' : TEAM_COLORS[winner]);
+      document.querySelector('#banner-text').textContent =
+        winner === null ? 'draw' : teams[winner].name + ' wins';
+    } else {
+      banner.hidden = true;
+    }
   }
 
+  /* ---------- board ---------- */
   function drawBoard(frame, previous) {
-    // Size the board off the whole arena row, not the pane it sits in: the
-    // pane hugs the board, so asking the pane would feed its own size back.
-    const arena = document.querySelector('.arena');
     const stage = document.querySelector('.stage');
-    const teams = frame.teams || [];
-    // Reserve the scoreboards, the last-action line, the score chart, padding.
-    const reserved = (teams.length ? 88 : 34) + 108;
-    const cell = Math.max(
-      6,
-      Math.floor(Math.min(
-        (stage.clientWidth - 30) / frame.width,
-        (arena.clientHeight - reserved) / frame.height
-      ))
-    );
+    const cell = Math.max(6, Math.floor(Math.min(
+      (stage.clientWidth - 24) / frame.width,
+      (stage.clientHeight - 24) / frame.height
+    )));
     const size = { w: frame.width * cell + 1, h: frame.height * cell + 1 };
     const scale = window.devicePixelRatio || 1;
     board.width = size.w * scale; board.height = size.h * scale;
     board.style.width = size.w + 'px'; board.style.height = size.h + 'px';
-    // The scoreboards line up with the halves they score.
-    document.querySelector('#table').style.width = (size.w + 26) + 'px';
     boardCtx.setTransform(scale, 0, 0, scale, 0, 0);
-    boardCtx.fillStyle = '#FFFFFF';
+    boardCtx.fillStyle = '#F7F4EC';
     boardCtx.fillRect(0, 0, size.w, size.h);
-    // Each half is a territory: a wash of its team's color under the grid.
+    const teams = frame.teams || [];
     if (teams.length === 2) {
       teams.forEach((team, k) => {
         boardCtx.fillStyle = TEAM_COLORS[k];
-        boardCtx.globalAlpha = 0.06;
+        boardCtx.globalAlpha = 0.07;
         boardCtx.fillRect(team.region.x * cell, team.region.y * cell,
                           team.region.width * cell, team.region.height * cell);
         boardCtx.globalAlpha = 1;
       });
     }
-    boardCtx.strokeStyle = '#E9E3D6';
+    boardCtx.strokeStyle = 'rgba(38,34,26,0.10)';
     boardCtx.lineWidth = 1;
     for (let x = 0; x <= frame.width; x++) {
       boardCtx.beginPath(); boardCtx.moveTo(x * cell + 0.5, 0); boardCtx.lineTo(x * cell + 0.5, size.h); boardCtx.stroke();
@@ -423,38 +495,31 @@
       const x = i % frame.width, y = Math.floor(i / frame.width);
       if (color !== WHITE) {
         boardCtx.fillStyle = color;
-        boardCtx.fillRect(x * cell + 2, y * cell + 2, cell - 3, cell - 3);
+        boardCtx.fillRect(x * cell + 1, y * cell + 1, cell - 1, cell - 1);
         const owner = frame.owners ? frame.owners[i] : -1;
-        if (owner >= 0 && cell >= 10) {
+        if (owner >= 0 && cell >= 11) {
           const r = parseInt(color.slice(1, 3), 16), g = parseInt(color.slice(3, 5), 16), b = parseInt(color.slice(5, 7), 16);
           boardCtx.fillStyle = 0.299 * r + 0.587 * g + 0.114 * b > 140 ? '#26221A' : '#FFFFFF';
-          boardCtx.font = '700 ' + Math.max(8, Math.floor(cell * 0.45)) + 'px ui-monospace, Menlo, monospace';
+          boardCtx.font = '700 ' + Math.max(8, Math.floor(cell * 0.44)) + 'px ' +
+            'ui-monospace, Menlo, monospace';
           boardCtx.fillText(String(owner), x * cell + cell / 2 + 0.5, y * cell + cell / 2 + 1);
         }
       }
       if (previous && previous.canvas[i] !== color) changed.push(i);
     }
-    // Seam between the two independently scored halves.
     if (teams.length === 2) {
       const seam = teams[1].region.x * cell + 0.5;
-      boardCtx.strokeStyle = '#26221A';
+      boardCtx.strokeStyle = 'rgba(11,15,20,0.55)';
       boardCtx.lineWidth = 2;
       boardCtx.setLineDash([7, 5]);
       boardCtx.beginPath(); boardCtx.moveTo(seam, 0); boardCtx.lineTo(seam, size.h); boardCtx.stroke();
       boardCtx.setLineDash([]);
     }
-    boardCtx.strokeStyle = '#26221A';
-    boardCtx.lineWidth = 2;
-    for (const i of changed) {
-      const x = i % frame.width, y = Math.floor(i / frame.width);
-      boardCtx.strokeRect(x * cell + 1.5, y * cell + 1.5, cell - 2, cell - 2);
-    }
-    // Squares held by the other side, marked wherever they are on the board:
-    // an erased one shows as a cross, since there is no pixel left to outline.
+    // Squares held by the other side; an erased one shows as a cross.
     (frame.owners || []).forEach((owner, i) => {
       if (!isAttack(frame, owner, i)) return;
       const x = (i % frame.width) * cell, y = Math.floor(i / frame.width) * cell;
-      boardCtx.strokeStyle = '#B91C1C';
+      boardCtx.strokeStyle = '#E11D48';
       boardCtx.lineWidth = 1.6;
       boardCtx.strokeRect(x + 1.5, y + 1.5, cell - 2, cell - 2);
       if (frame.canvas[i] === WHITE) {
@@ -464,67 +529,72 @@
         boardCtx.stroke();
       }
     });
-    const acts = changed.map(i => {
-      const owner = frame.owners ? frame.owners[i] : null;
-      const who = owner === null || owner === undefined || owner < 0 ? 'someone' : 'agent ' + owner;
-      const verb = frame.canvas[i] === WHITE ? 'erased' : 'painted';
-      const at = ' (' + (i % frame.width) + ',' + Math.floor(i / frame.width) + ')';
-      // Only call out the half when the write crossed into enemy ground.
-      return isAttack(frame, owner, i)
-        ? who + ' ' + verb + at + ' in ' + teams[regionAt(frame, i % frame.width)].name + "'s half"
-        : who + ' ' + verb + at;
-    });
-    document.querySelector('#lastaction').textContent =
-      acts.length ? acts.join(' \u00b7 ') : 'no accepted writes this turn';
+    // This turn's writes, outlined last so they sit on top.
+    boardCtx.strokeStyle = '#0B0F14';
+    boardCtx.lineWidth = 2;
+    for (const i of changed) {
+      const x = i % frame.width, y = Math.floor(i / frame.width);
+      boardCtx.strokeRect(x * cell + 1.5, y * cell + 1.5, cell - 2, cell - 2);
+    }
+    return changed;
   }
 
-  function drawSpark(series, threshold, currentIndex, turnsPerRound, colors) {
+  /* ---------- event feed ---------- */
+  function renderFeed(frame, changed) {
+    const teams = frame.teams || [];
+    const rows = changed.map(i => {
+      const owner = frame.owners ? frame.owners[i] : -1;
+      const erased = frame.canvas[i] === WHITE;
+      const raid = isAttack(frame, owner, i);
+      const at = '(' + (i % frame.width) + ',' + Math.floor(i / frame.width) + ')';
+      const seat = '<span style="color:' + SEAT_COLORS[owner % SEAT_COLORS.length] + '">AGENT ' + owner + '</span>';
+      const what = raid
+        ? seat + ' ' + (erased ? 'wiped' : 'painted over') + ' ' + at + ' in ' +
+          esc(teams[regionAt(frame, i % frame.width)].name)
+        : seat + ' ' + (erased ? 'erased' : 'painted') + ' ' + at;
+      return '<div class="ev' + (raid ? ' raid' : '') + '">' +
+        '<span class="t">T' + frame.turn + '</span>' +
+        (raid ? '<span class="tag">RAID</span>' : '') +
+        '<span class="txt">' + what + '</span></div>';
+    });
+    if (!rows.length) rows.push('<div class="ev"><span class="t">T' + frame.turn +
+      '</span><span class="txt" style="color:var(--muted)">no accepted writes &mdash; every seat collided</span></div>');
+    const feed = document.querySelector('#feed');
+    feed.innerHTML = rows.join('');
+    feed.scrollTop = 0;
+  }
+
+  /* ---------- score chart ---------- */
+  function drawSpark(series, currentIndex, colors) {
     const scale = window.devicePixelRatio || 1;
-    // The chart takes whatever height the board leaves; read it, don't set it.
-    const w = spark.clientWidth || 500, h = Math.max(46, spark.clientHeight || 46);
+    const w = spark.clientWidth || 400, h = Math.max(40, spark.clientHeight || 40);
     spark.width = w * scale; spark.height = h * scale;
     const ctx = spark.getContext('2d');
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const pad = { l: 4, r: 48, t: 10, b: 8 };
+    const pad = { l: 2, r: 40, t: 8, b: 4 };
     const plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
     const length = Math.max(...series.map(s => s.length), 1);
     const max = Math.max(0.05, ...series.flat());
     const x = i => pad.l + (length > 1 ? (i / (length - 1)) * plotW : plotW / 2);
     const y = v => pad.t + plotH - (v / max) * plotH;
-    ctx.font = '10px ui-monospace, Menlo, monospace';
-    // A turn grid every 5 turns, so swings can be read against the clock.
-    ctx.strokeStyle = '#EFE9DC';
+    ctx.strokeStyle = 'rgba(135,152,171,0.16)';
     ctx.lineWidth = 1;
-    const step = turnsPerRound && turnsPerRound < length - 1 ? turnsPerRound : 5;
-    for (let t = step; t < length; t += step) {
+    for (let t = 10; t < length; t += 10) {
       ctx.beginPath(); ctx.moveTo(x(t), pad.t); ctx.lineTo(x(t), pad.t + plotH); ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.moveTo(pad.l, pad.t + plotH + 0.5); ctx.lineTo(w - pad.r, pad.t + plotH + 0.5); ctx.stroke();
-    if (threshold && threshold <= max) {
-      ctx.strokeStyle = '#B0A896';
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(pad.l, y(threshold)); ctx.lineTo(w - pad.r, y(threshold)); ctx.stroke();
-      ctx.setLineDash([]);
     }
     const labels = [];
     series.forEach((scores, k) => {
       if (!scores.length) return;
-      const color = (colors && colors[k]) || '#B45309';
+      const color = (colors && colors[k]) || TEAM_COLORS[0];
       const upto = Math.min(currentIndex === undefined ? scores.length - 1 : currentIndex, scores.length - 1);
-      // Area under the line, so the lead reads as territory rather than a squiggle.
       ctx.beginPath();
       ctx.moveTo(x(0), pad.t + plotH);
       scores.forEach((v, i) => ctx.lineTo(x(i), y(v)));
       ctx.lineTo(x(scores.length - 1), pad.t + plotH);
       ctx.closePath();
-      ctx.globalAlpha = 0.11;
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.16; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
       ctx.beginPath();
       scores.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
       ctx.stroke();
@@ -532,7 +602,6 @@
       ctx.beginPath(); ctx.arc(x(upto), y(scores[upto]), 3.5, 0, 2 * Math.PI); ctx.fill();
       labels.push({ y: y(scores[upto]), text: (100 * scores[upto]).toFixed(0) + '%', color });
     });
-    // Two lines that meet would print their labels on top of each other.
     labels.sort((a, b) => a.y - b.y);
     for (let i = 1; i < labels.length; i++) {
       if (labels[i].y - labels[i - 1].y < 12) labels[i].y = labels[i - 1].y + 12;
@@ -540,49 +609,27 @@
     ctx.font = '700 11px ui-monospace, Menlo, monospace';
     labels.forEach(label => {
       ctx.fillStyle = label.color;
-      ctx.fillText(label.text, w - pad.r + 6, label.y + 4);
+      ctx.fillText(label.text, w - pad.r + 5, label.y + 4);
     });
   }
 
-  function renderFeedback(feedback) {
-    const el = document.querySelector('#feedback');
-    if (!feedback) { el.textContent = 'Image-model feedback: unavailable'; return; }
-    el.innerHTML =
-      '<span class="' + (feedback.passing ? 'pass' : 'fail') + '">' + (feedback.passing ? 'PASSING' : 'NOT PASSING') + '</span>' +
-      ' \u00b7 ' + esc(feedback.model) + ' score <strong>' + (100 * feedback.target_score).toFixed(2) + '%</strong>' +
-      ' (need &gt;' + (100 * feedback.pass_threshold).toFixed(0) + '%)' +
-      ' \u00b7 \u0394 ' + (100 * feedback.score_delta).toFixed(3) + '%' +
-      ' \u00b7 rank ' + feedback.target_rank + (feedback.label_count ? '/' + feedback.label_count : '');
-  }
-
+  /* ---------- frame ---------- */
   function showFrame(frame, previous, series, scoreIndex) {
     layoutSeats(frame);
+    const changed = drawBoard(frame, previous);
+    renderHud(frame);
+    renderRoster(frame, scoreIndex);
+    renderFeed(frame, changed);
     const teams = frame.teams || [];
-    document.querySelector('#target').textContent = frame.target;
-    document.querySelector('#turn').textContent = frame.turn;
-    document.querySelector('#max-turns').textContent = frame.max_turns;
-    document.querySelector('#roundlabel').textContent =
-      frame.rounds > 1 ? 'Round ' + frame.round + '/' + frame.rounds + ' \u00b7 ' : '';
-    drawBoard(frame, previous);
-    if (teams.length) renderTeamHeads(frame);
-    else renderFeedback(frame.image_model_feedback);
-    renderBubbles(frame, scoreIndex);
-    // A versus episode has no single pass threshold; the higher final score wins.
-    const threshold = teams.length || !frame.image_model_feedback
-      ? 0
-      : frame.image_model_feedback.pass_threshold;
-    drawSpark(series, threshold, scoreIndex, frame.turns_per_round, teams.length ? TEAM_COLORS : null);
+    drawSpark(series, scoreIndex, teams.length ? TEAM_COLORS : null);
     const hint = document.querySelector('#charthint');
-    if (hint) hint.textContent = teams.length
-      ? teams.map((t, k) => t.name + ' ' + t.target).join('   vs   ')
-      : '';
+    if (hint) hint.textContent = teams.length ? teams.map(t => t.target).join(' vs ') : '';
   }
 
   function replayScores() {
     const teams = (frames[0] && frames[0].teams) || [];
     if (teams.length) {
-      return teams.map((_, k) =>
-        frames.map(f => ((f.team_feedback || [])[k] || {}).target_score || 0));
+      return teams.map((_, k) => frames.map(f => ((f.team_feedback || [])[k] || {}).target_score || 0));
     }
     return [frames.map(f => (f.image_model_feedback ? f.image_model_feedback.target_score : 0))];
   }
@@ -590,28 +637,27 @@
   function showReplayFrame(index) {
     frameIndex = Math.max(0, Math.min(frames.length - 1, Number(index)));
     const frame = frames[frameIndex];
-    const previous = frameIndex > 0 ? frames[frameIndex - 1] : null;
-    showFrame(frame, previous, replayScores(), frameIndex);
+    showFrame(frame, frameIndex > 0 ? frames[frameIndex - 1] : null, replayScores(), frameIndex);
     timeline.value = frameIndex;
-    document.querySelector('#framelabel').textContent = 'frame ' + (frameIndex + 1) + '/' + frames.length;
+    document.querySelector('#framelabel').textContent = (frameIndex + 1) + ' / ' + frames.length;
     status.textContent = 'Replay';
+    status.classList.add('replay');
   }
 
   function loadReplay(payload) {
     frames = payload.frames || [];
-    if (!frames.length) { status.textContent = 'Replay has no frames'; return; }
+    if (!frames.length) { status.textContent = 'No frames'; return; }
     timeline.max = frames.length - 1;
     showReplayFrame(0);
     clearInterval(timer);
     timer = setInterval(() => {
       if (!playing || !frames.length) return;
       if (frameIndex >= frames.length - 1) {
-        playing = false;
-        playButton.textContent = 'Replay';
+        playing = false; playButton.textContent = 'Replay';
         return;
       }
       showReplayFrame(frameIndex + 1);
-    }, 900);
+    }, 800);
   }
 
   let previousLiveFrame = null;
@@ -626,41 +672,38 @@
     });
     showFrame(payload, previousLiveFrame, liveScores);
     previousLiveFrame = payload;
-    status.textContent = payload.done ? 'Episode complete' : 'Live';
+    status.textContent = payload.done ? 'Complete' : 'Live';
+    status.classList.toggle('replay', Boolean(payload.done));
   }
 
   const params = new URLSearchParams(location.search);
-  // Observatory static replay viewers receive the replay URL as ?replay=.
   const replayUri = params.get('replay') || params.get('replay_uri');
   const replayMode = location.pathname.endsWith('/replay');
-  // A standalone page (scripts/render_versus_page.py) carries its episode
-  // inline, so it needs no server and no network at all.
+  // A standalone page carries its episode inline: no server, no network.
   const embedded = document.getElementById('replay-data');
 
   if (embedded) {
     loadReplay(JSON.parse(embedded.textContent));
-    status.textContent = 'Replay';
   } else if (replayUri) {
-    status.textContent = 'Fetching replay\u2026';
+    status.textContent = 'Loading';
     fetch(replayUri)
       .then(async response => {
         if (!response.ok) throw new Error('HTTP ' + response.status);
         if (/\.(z|gz)$/.test(new URL(replayUri, location.href).pathname)) {
           const format = replayUri.endsWith('.gz') ? 'gzip' : 'deflate';
-          const stream = response.body.pipeThrough(new DecompressionStream(format));
-          return new Response(stream).json();
+          return new Response(response.body.pipeThrough(new DecompressionStream(format))).json();
         }
         return response.json();
       })
       .then(loadReplay)
-      .catch(error => { status.textContent = 'Failed to load replay: ' + error.message; });
+      .catch(error => { status.textContent = 'Failed: ' + error.message; });
   } else {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const suppliedAddress = params.get('address');
     const defaultAddress = protocol + '//' + location.host + '/' + (replayMode ? 'replay' : 'global');
     const socket = new WebSocket(suppliedAddress || defaultAddress);
-    socket.onopen = () => { status.textContent = replayMode ? 'Loading replay\u2026' : 'Live'; };
-    socket.onerror = () => { status.textContent = 'Connection failed'; };
+    socket.onopen = () => { status.textContent = replayMode ? 'Loading' : 'Live'; };
+    socket.onerror = () => { status.textContent = 'No connection'; };
     socket.onmessage = event => {
       const payload = JSON.parse(event.data);
       if (payload.type === 'replay') loadReplay(payload);
@@ -669,7 +712,9 @@
     };
   }
 
-  timeline.addEventListener('input', () => { playing = false; playButton.textContent = 'Play'; showReplayFrame(timeline.value); });
+  timeline.addEventListener('input', () => {
+    playing = false; playButton.textContent = 'Play'; showReplayFrame(timeline.value);
+  });
   playButton.addEventListener('click', () => {
     if (!playing && frames.length && frameIndex >= frames.length - 1) showReplayFrame(0);
     playing = !playing;
