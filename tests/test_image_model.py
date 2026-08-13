@@ -3,11 +3,14 @@ from __future__ import annotations
 import unittest
 
 from codrawing.game.image_model import (
+    COMPOSITE_MODEL_NAME,
     PASS_THRESHOLD,
     QUICKDRAW_MODEL_NAME,
     QUICKDRAW_MODEL_PATH,
+    CompositeScorer,
     QuickDrawScorer,
     TargetScorerRouter,
+    clip_labels,
 )
 from codrawing.player.pixel_templates import make_template
 
@@ -113,6 +116,63 @@ class TargetScorerRouterTest(unittest.TestCase):
                 turn=0,
                 previous_score=None,
             )
+
+
+class StubScorer:
+    """Stand-in component scorer: no model, fixed score."""
+
+    def __init__(self, value: float, threshold: float, predictions: list[str]) -> None:
+        self.value = value
+        self.threshold = threshold
+        self.predictions = predictions
+
+    def score(self, **kwargs: object) -> dict:
+        return {
+            "target_score": self.value,
+            "pass_threshold": self.threshold,
+            "target_rank": 1,
+            "label_count": 11,
+            "top_predictions": [{"label": p, "probability": 0.0} for p in self.predictions],
+        }
+
+
+class CompositeScorerTest(unittest.TestCase):
+    """The judge samples and swings; averaging a deterministic CLIP score halves that."""
+
+    def test_score_is_the_mean_and_both_components_are_reported(self) -> None:
+        judge = StubScorer(0.70, 0.85, ["strawberry", "tomato"])
+        clip = StubScorer(0.999, 0.90, ["strawberry", "pineapple", "pear"])
+        result = CompositeScorer(judge, clip).score(
+            canvas=["#FFFFFF"], width=1, height=1, target="strawberry", turn=3,
+            previous_score=0.5,
+        )
+        self.assertAlmostEqual(result["target_score"], 0.8495)
+        self.assertAlmostEqual(result["components"]["judge"], 0.70)
+        self.assertAlmostEqual(result["components"]["clip"], 0.999)
+        self.assertAlmostEqual(result["pass_threshold"], 0.875)
+        self.assertAlmostEqual(result["score_delta"], 0.3495)
+        self.assertEqual(result["model"], COMPOSITE_MODEL_NAME)
+        # The judge's free-text guesses lead: they say what the drawing reads as.
+        self.assertEqual(
+            [p["label"] for p in result["top_predictions"]],
+            ["strawberry", "tomato", "strawberry", "pineapple", "pear"],
+        )
+
+    def test_a_collapsed_clip_score_drags_the_composite_down(self) -> None:
+        """Sabotage that destroys class membership must show up even if the
+        judge is feeling generous that turn."""
+        judge = StubScorer(0.70, 0.85, ["blob"])
+        clip = StubScorer(0.21, 0.90, ["snowman"])
+        result = CompositeScorer(judge, clip).score(
+            canvas=["#FFFFFF"], width=1, height=1, target="strawberry", turn=3,
+            previous_score=0.85,
+        )
+        self.assertAlmostEqual(result["target_score"], 0.455)
+        self.assertLess(result["score_delta"], -0.39)
+
+    def test_clip_labels_include_the_opponents_target(self) -> None:
+        labels = clip_labels(("candle", "sun"), ("pineapple", "strawberry"), "pineapple")
+        self.assertEqual(labels, ("candle", "sun", "pineapple", "strawberry"))
 
 
 if __name__ == "__main__":

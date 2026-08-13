@@ -204,6 +204,23 @@ class QuickDrawScorer:
         }
 
 
+def clip_labels(
+    defaults: tuple[str, ...], extra: tuple[str, ...], target: str
+) -> tuple[str, ...]:
+    """The label set CLIP scores against, de-duplicated, order preserved.
+
+    A CLIP score is a softmax over these labels, so it only discriminates
+    against labels it is shown: in an adversarial episode the opponent's
+    target has to be in the set or both halves score against fruit-free
+    distractors and saturate.
+    """
+    labels: list[str] = []
+    for label in (*defaults, *extra, target):
+        if label not in labels:
+            labels.append(label)
+    return tuple(labels)
+
+
 class MobileClipScorer:
     """Open-vocabulary zero-shot scorer: apple/MobileCLIP2-S0 via open_clip.
 
@@ -225,11 +242,20 @@ class MobileClipScorer:
     DEFAULT_THRESHOLD = 0.9
     UPSCALE = 384
 
-    def __init__(self, model_name: str = "MobileCLIP2-S0", pretrained: str = "dfndr2b") -> None:
+    def __init__(
+        self,
+        model_name: str = "MobileCLIP2-S0",
+        pretrained: str = "dfndr2b",
+        extra_labels: tuple[str, ...] = (),
+    ) -> None:
         import open_clip
+        import threading
         import torch
 
         self.torch = torch
+        # Both halves of a versus canvas are scored at once, from two threads.
+        self.lock = threading.Lock()
+        self.extra_labels = tuple(extra_labels)
         device = os.environ.get("CODRAWING_MOBILECLIP_DEVICE")
         if device is None:
             if torch.cuda.is_available():
@@ -248,17 +274,17 @@ class MobileClipScorer:
         self._text_features: dict[tuple[str, ...], Any] = {}
 
     def _labels_for(self, target: str) -> tuple[str, ...]:
-        labels = tuple(self.DEFAULT_LABELS)
-        return labels if target in labels else labels + (target,)
+        return clip_labels(self.DEFAULT_LABELS, self.extra_labels, target)
 
     def _encode_labels(self, labels: tuple[str, ...]) -> Any:
-        if labels not in self._text_features:
-            text = self.tokenizer([self.PROMPT_TEMPLATE.format(label) for label in labels])
-            with self.torch.no_grad():
-                features = self.model.encode_text(text.to(self.device))
-                features /= features.norm(dim=-1, keepdim=True)
-            self._text_features[labels] = features
-        return self._text_features[labels]
+        with self.lock:
+            if labels not in self._text_features:
+                text = self.tokenizer([self.PROMPT_TEMPLATE.format(label) for label in labels])
+                with self.torch.no_grad():
+                    features = self.model.encode_text(text.to(self.device))
+                    features /= features.norm(dim=-1, keepdim=True)
+                self._text_features[labels] = features
+            return self._text_features[labels]
 
     def score(
         self,
@@ -283,7 +309,7 @@ class MobileClipScorer:
         # Nearest upscale keeps pixel-art edges crisp for the CLIP preprocessor.
         image = image.resize((self.UPSCALE, self.UPSCALE), Image.Resampling.NEAREST)
         batch = self.preprocess(image).unsqueeze(0).to(self.device)
-        with self.torch.no_grad():
+        with self.lock, self.torch.no_grad():
             image_features = self.model.encode_image(batch)
             image_features /= image_features.norm(dim=-1, keepdim=True)
             probabilities = (
@@ -427,6 +453,69 @@ class VlmJudgeScorer:
         }
 
 
+COMPOSITE_MODEL_NAME = "judge_clip_mean_v1"
+
+
+class CompositeScorer:
+    """Mean of the VLM judge and the CLIP zero-shot score.
+
+    The judge samples, so on an unchanged canvas it swings by 10-15 points
+    between turns; deciding an episode on one final judgment is then mostly
+    noise. CLIP is deterministic and responds to shape, so averaging the two
+    halves the judge's variance while keeping the judge's sensitivity to
+    scene completeness, which CLIP does not have.
+
+    Both component scores are reported so a player can tell a shape change
+    from a judgment change.
+    """
+
+    def __init__(self, judge: "VlmJudgeScorer", clip: MobileClipScorer) -> None:
+        self.judge = judge
+        self.clip = clip
+
+    def score(
+        self,
+        *,
+        canvas: list[str],
+        width: int,
+        height: int,
+        target: str,
+        turn: int,
+        previous_score: float | None,
+    ) -> dict[str, Any]:
+        from concurrent.futures import ThreadPoolExecutor
+
+        arguments = dict(
+            canvas=canvas, width=width, height=height, target=target, turn=turn,
+            previous_score=None,
+        )
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            judge_future = pool.submit(self.judge.score, **arguments)
+            clip_future = pool.submit(self.clip.score, **arguments)
+            judge, clip = judge_future.result(), clip_future.result()
+
+        target_score = (judge["target_score"] + clip["target_score"]) / 2
+        threshold = (judge["pass_threshold"] + clip["pass_threshold"]) / 2
+        return {
+            "model": COMPOSITE_MODEL_NAME,
+            "turn": turn,
+            "target_score": target_score,
+            "score_delta": 0.0 if previous_score is None else target_score - previous_score,
+            "pass_threshold": threshold,
+            "passing": target_score > threshold,
+            "components": {
+                "judge": judge["target_score"],
+                "clip": clip["target_score"],
+            },
+            "target_rank": clip["target_rank"],
+            "label_count": clip["label_count"],
+            "best_target_label": target,
+            # The judge's free-text guesses first: they say what the drawing
+            # reads as, which the fixed CLIP label set cannot.
+            "top_predictions": (judge["top_predictions"][:2] + clip["top_predictions"][:3]),
+        }
+
+
 class TargetScorerRouter:
     """Route each target to the classifier that knows it.
 
@@ -442,15 +531,28 @@ class TargetScorerRouter:
         quickdraw_model_path: Path = QUICKDRAW_MODEL_PATH,
         use_mobileclip: bool = False,
         use_judge: bool = False,
+        use_composite: bool = False,
+        clip_labels: tuple[str, ...] = (),
     ) -> None:
         self._imagenet_model_path = imagenet_model_path
         self._imagenet_labels_path = imagenet_labels_path
         self._imagenet: ImageModelScorer | None = None
         self.quickdraw = QuickDrawScorer(quickdraw_model_path)
-        self.mobileclip = MobileClipScorer() if use_mobileclip else None
-        self.judge = VlmJudgeScorer() if use_judge else None
+        self.mobileclip = (
+            MobileClipScorer(extra_labels=clip_labels)
+            if use_mobileclip or use_composite
+            else None
+        )
+        self.judge = VlmJudgeScorer() if use_judge or use_composite else None
+        self.composite = (
+            CompositeScorer(self.judge, self.mobileclip)
+            if use_composite and self.judge and self.mobileclip
+            else None
+        )
 
     def score(self, *, target: str, **kwargs: Any) -> dict[str, Any]:
+        if self.composite is not None:
+            return self.composite.score(target=target, **kwargs)
         if self.judge is not None:
             return self.judge.score(target=target, **kwargs)
         if self.mobileclip is not None:
@@ -474,16 +576,29 @@ def scorer_from_environment() -> TargetScorerRouter | None:
     model_path = os.environ.get("CODRAWING_IMAGE_MODEL")
     quickdraw_override = os.environ.get("CODRAWING_QUICKDRAW_MODEL")
     scorer_name = os.environ.get("CODRAWING_SCORER", "").lower()
-    if not model_path and not quickdraw_override and scorer_name not in ("mobileclip", "judge"):
+    if (
+        not model_path
+        and not quickdraw_override
+        and scorer_name not in ("mobileclip", "judge", "both")
+    ):
         return None
     labels_path = os.environ.get("CODRAWING_IMAGE_MODEL_LABELS")
     if model_path and not labels_path:
         raise ValueError("CODRAWING_IMAGE_MODEL_LABELS is required when the image model is enabled")
     quickdraw_path = Path(quickdraw_override) if quickdraw_override else QUICKDRAW_MODEL_PATH
+    # Every episode target belongs in CLIP's label set: its score is a softmax
+    # and only discriminates against the labels it is given.
+    clip_labels = tuple(
+        label.strip()
+        for label in os.environ.get("CODRAWING_SCORER_LABELS", "").split(",")
+        if label.strip()
+    )
     return TargetScorerRouter(
         Path(model_path) if model_path else None,
         Path(labels_path) if labels_path else None,
         quickdraw_path,
         use_mobileclip=scorer_name == "mobileclip",
         use_judge=scorer_name == "judge",
+        use_composite=scorer_name == "both",
+        clip_labels=clip_labels,
     )

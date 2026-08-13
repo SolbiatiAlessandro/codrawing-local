@@ -5,42 +5,127 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>co/place</title>
   <style>
-    :root { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    :root {
+      font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+      --paper: #FAF7F0; --card: #FFFFFF; --grid: #E9E3D6; --line: #D8D2C4;
+      --ink: #26221A; --muted: #7A7466; --accent: #B45309;
+      --good: #15803D; --bad: #B91C1C;
+      --teamA: #D97706; --teamB: #3B82F6;
+    }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { margin: 0; background: #FAF7F0; color: #26221A; overflow: hidden; }
-    main { height: 100vh; display: grid; grid-template-rows: auto 1fr auto; padding: 12px 16px; gap: 10px; max-width: 1400px; margin: 0 auto; }
-    header { display: flex; flex-wrap: wrap; gap: 4px 24px; align-items: baseline; }
-    header h1 { font-size: 20px; margin: 0; }
-    header .sub { color: #7A7466; font-size: 12.5px; }
-    #feedback { font-size: 12.5px; color: #7A7466; width: 100%; }
-    #feedback .pass { color: #15803D; font-weight: 700; }
-    #feedback .fail { color: #B91C1C; font-weight: 700; }
-    .content { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(340px, 460px); gap: 16px; min-height: 0; }
-    .boardpane { display: flex; flex-direction: column; min-height: 0; background: #FFFFFF; border: 1px solid #D8D2C4; border-radius: 8px; padding: 10px 14px; }
-    .boardpane .paneheader { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid #E9E3D6; padding-bottom: 8px; }
-    .boardbox { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-    canvas#board { display: block; }
-    #lastaction { font-size: 11.5px; color: #7A7466; border-top: 1px solid #E9E3D6; padding-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #spark { width: 100%; height: 54px; display: block; }
-    .robots { display: grid; grid-auto-rows: 1fr; gap: 8px; min-height: 0; }
-    .robotrow { display: grid; grid-template-columns: 64px 1fr; gap: 4px; align-items: center; min-height: 0; }
-    .robotrow svg { width: 58px; height: 58px; display: block; margin: 0 auto; }
-    .bubble { position: relative; background: #FFFFFF; border: 1.5px solid #26221A; border-radius: 10px; padding: 6px 9px; font-size: 11px; line-height: 1.45; max-height: 100%; overflow-y: auto; }
-    .bubble::before { content: ""; position: absolute; left: -8px; top: 22px; width: 12px; height: 12px; background: #FFFFFF; border-left: 1.5px solid #26221A; border-bottom: 1.5px solid #26221A; transform: rotate(45deg); }
-    .bubble.quiet { border-color: #D8D2C4; color: #A8A193; }
-    .bubble.quiet::before { border-color: #D8D2C4; }
+    body { margin: 0; background: var(--paper); color: var(--ink); overflow: hidden; }
+    main {
+      height: 100vh; display: grid; grid-template-rows: auto 1fr auto;
+      padding: 10px 14px 12px; gap: 8px; max-width: 1760px; margin: 0 auto;
+    }
+
+    header { display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: baseline; }
+    header h1 { font-size: 19px; margin: 0; letter-spacing: 0.01em; }
+    header .sub { color: var(--muted); font-size: 12.5px; }
+    header .rule {
+      margin-left: auto; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+    }
+    #feedback { font-size: 12.5px; color: var(--muted); width: 100%; }
+    #feedback .pass { color: var(--good); font-weight: 700; }
+    #feedback .fail { color: var(--bad); font-weight: 700; }
+
+    /* Two squads facing each other across the canvas. */
+    .arena { display: grid; grid-template-columns: 250px minmax(0, 1fr) 250px; gap: 14px; min-height: 0; }
+    .arena.solo { grid-template-columns: minmax(0, 1fr) 340px; }
+    .arena.solo .squad.right { display: none; }
+
+    .squad { display: flex; flex-direction: column; min-height: 0; gap: 6px; }
+    .squadname {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      display: flex; align-items: center; gap: 7px; padding-bottom: 5px;
+      border-bottom: 2px solid currentColor;
+    }
+    .squad.left .squadname { color: var(--teamA); }
+    .squad.right .squadname { color: var(--teamB); justify-content: flex-end; }
+    .squadbody {
+      display: grid; grid-auto-rows: minmax(54px, auto); gap: 8px; align-content: start;
+      min-height: 0; flex: 1; overflow-y: auto; padding-top: 2px;
+    }
+    .robotrow { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 4px; align-items: center; min-height: 0; }
+    .squad.right .robotrow { grid-template-columns: minmax(0, 1fr) 52px; }
+    .squad.right .robotrow svg { order: 2; }
+    .robotrow svg { width: 48px; height: 48px; display: block; margin: 0 auto; }
+    .bubble {
+      position: relative; background: var(--card); border: 1.5px solid var(--ink);
+      border-radius: 10px; padding: 5px 8px; font-size: 10.5px; line-height: 1.4;
+      max-height: 100%; overflow-y: auto; min-height: 0;
+    }
+    .bubble::before {
+      content: ""; position: absolute; left: -7px; top: 18px; width: 11px; height: 11px;
+      background: var(--card); border-left: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink);
+      transform: rotate(45deg);
+    }
+    .squad.right .bubble::before {
+      left: auto; right: -7px;
+      border-left: none; border-bottom: none;
+      border-right: 1.5px solid var(--ink); border-top: 1.5px solid var(--ink);
+    }
+    .bubble.quiet { border-color: var(--line); color: #A8A193; }
+    .bubble.quiet::before { border-color: var(--line); }
     .bubble .say { display: block; }
+    .seat { font-weight: 700; letter-spacing: 0.06em; }
+
+    .stage { display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+    /* Two scoreboards, each sitting over the half it scores. */
+    .teamheads { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; margin: 0 auto; width: 100%; }
+    .teamhead {
+      background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--tint, var(--line));
+      border-radius: 6px 6px 0 0; padding: 7px 12px 6px;
+      display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0;
+    }
+    .teamhead .who { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .teamhead .what { font-size: 12.5px; color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .teamhead .score { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .teamhead .delta { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    .teamhead .lead {
+      font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; color: var(--good);
+      border: 1px solid var(--good); border-radius: 999px; padding: 1px 7px;
+    }
+    .teamhead .parts { font-size: 10.5px; color: var(--muted); width: 100%; font-variant-numeric: tabular-nums; }
+    .boardpane {
+      flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--card);
+      border: 1px solid var(--line); border-radius: 0 0 8px 8px; padding: 8px 12px 10px;
+    }
+    .boardbox { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+    /* Canvas, last action, and score line move as one block. */
+    .boardstack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    canvas#board { display: block; }
+    #lastaction {
+      font-size: 11px; color: var(--muted); border-top: 1px solid var(--grid);
+      padding-top: 5px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #spark { width: 100%; height: 46px; display: block; }
+
     .controls { display: flex; gap: 10px; align-items: center; }
-    .controls button { font: inherit; color: #26221A; background: #FFFFFF; border: 1px solid #D8D2C4; border-radius: 4px; padding: 4px 14px; cursor: pointer; }
-    .controls button:hover { border-color: #7A7466; }
-    .controls input[type="range"] { flex: 1; accent-color: #B45309; }
+    .controls button {
+      font: inherit; color: var(--ink); background: var(--card);
+      border: 1px solid var(--line); border-radius: 4px; padding: 4px 14px; cursor: pointer;
+    }
+    .controls button:hover { border-color: var(--muted); }
+    .controls input[type="range"] { flex: 1; accent-color: var(--accent); }
     .turnlabel { min-width: 90px; text-align: right; font-size: 12.5px; }
-    #status { color: #7A7466; font-size: 12px; }
-    @media (max-width: 780px) {
+    #status { color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 1100px) {
       body { overflow: auto; }
       main { height: auto; }
-      .content { grid-template-columns: 1fr; }
+      .arena, .arena.solo { grid-template-columns: 1fr; }
+      .arena.solo .squad.right { display: flex; }
+      .squad.right .robotrow { grid-template-columns: 52px minmax(0, 1fr); }
+      .squad.right .robotrow svg { order: 0; }
+      .squad.right .bubble::before {
+        left: -7px; right: auto;
+        border-left: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink);
+        border-right: none; border-top: none;
+      }
+      .squad.right .squadname { justify-content: flex-start; }
     }
   </style>
 </head>
@@ -48,18 +133,34 @@
 <main>
   <header>
     <h1>co/place</h1>
-    <span class="sub">Target: <strong id="target">&mdash;</strong> &middot; <span id="roundlabel"></span>Turn <span id="turn">0</span>/<span id="max-turns">0</span> &middot; <span id="status">Connecting&hellip;</span></span>
+    <span class="sub"><span id="targetline">Target: <strong id="target">&mdash;</strong> &middot; </span><span id="roundlabel"></span>Turn <span id="turn">0</span>/<span id="max-turns">0</span> &middot; <span id="status">Connecting&hellip;</span></span>
+    <span class="rule" id="rule" hidden>the final turn decides the winner</span>
     <div id="feedback">waiting for classifier&hellip;</div>
   </header>
 
-  <div class="content">
-    <section class="boardpane">
-      <div class="paneheader"><span id="canvastitle">Canvas</span><span id="framestamp" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
-      <div class="boardbox"><canvas id="board"></canvas></div>
-      <div id="lastaction">&mdash;</div>
-      <canvas id="spark"></canvas>
+  <div class="arena" id="arena">
+    <section class="squad left" id="squad-left">
+      <div class="squadname" id="squadname-left">Agents</div>
+      <div class="squadbody" id="squadbody-left"></div>
     </section>
-    <section class="robots" id="robots"></section>
+
+    <section class="stage">
+      <div class="teamheads" id="teamheads" hidden></div>
+      <section class="boardpane">
+        <div class="boardbox">
+          <div class="boardstack">
+            <canvas id="board"></canvas>
+            <div id="lastaction">&mdash;</div>
+            <canvas id="spark"></canvas>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="squad right" id="squad-right">
+      <div class="squadname" id="squadname-right">Team B</div>
+      <div class="squadbody" id="squadbody-right"></div>
+    </section>
   </div>
 
   <div class="controls">
@@ -77,12 +178,12 @@
   const board = document.querySelector('#board');
   const boardCtx = board.getContext('2d');
   const spark = document.querySelector('#spark');
-  const robotsPane = document.querySelector('#robots');
   const status = document.querySelector('#status');
   const timeline = document.querySelector('#timeline');
   const playButton = document.querySelector('#play');
   let frames = [], frameIndex = 0, playing = true, timer = null;
   let liveScores = [];
+  let seatLayout = null;   // {left: [slots], right: [slots], versus: bool}
 
   function esc(value) {
     const node = document.createElement('div'); node.textContent = value; return node.innerHTML;
@@ -107,43 +208,105 @@
       '</svg>';
   }
 
-  function initRobots(count) {
-    robotsPane.innerHTML = Array.from({ length: count }, (_, index) =>
-      '<div class="robotrow">' + robotSvg(SEAT_COLORS[index % SEAT_COLORS.length], index) +
-      '<div class="bubble quiet" id="bubble-' + index + '"><span class="say">&hellip;</span></div></div>'
-    ).join('');
+  function seatRow(slot) {
+    return '<div class="robotrow">' + robotSvg(SEAT_COLORS[slot % SEAT_COLORS.length], slot) +
+      '<div class="bubble quiet" id="bubble-' + slot + '"><span class="say">&hellip;</span></div></div>';
   }
-  initRobots(5);
+
+  // One squad per side of the canvas, each seated in front of the half it draws.
+  function layoutSeats(frame) {
+    const teams = frame.teams || [];
+    const count = (frame.player_names || []).length || 5;
+    const next = teams.length === 2
+      ? { versus: true, left: teams[0].slots.slice(), right: teams[1].slots.slice(),
+          names: [teams[0].name, teams[1].name] }
+      : { versus: false, left: Array.from({ length: count }, (_, i) => i), right: [], names: [] };
+    const same = seatLayout &&
+      seatLayout.versus === next.versus &&
+      String(seatLayout.left) === String(next.left) &&
+      String(seatLayout.right) === String(next.right);
+    if (same) return;
+    seatLayout = next;
+    document.querySelector('#arena').classList.toggle('solo', !next.versus);
+    document.querySelector('#squadbody-left').innerHTML = next.left.map(seatRow).join('');
+    document.querySelector('#squadbody-right').innerHTML = next.right.map(seatRow).join('');
+    document.querySelector('#squadname-left').textContent = next.versus ? next.names[0] : 'Agents';
+    document.querySelector('#squadname-right').textContent = next.versus ? next.names[1] : '';
+    document.querySelector('#targetline').hidden = next.versus;
+    document.querySelector('#rule').hidden = !next.versus;
+    document.querySelector('#feedback').hidden = next.versus;
+    document.querySelector('#teamheads').hidden = !next.versus;
+  }
 
   function renderBubbles(frame) {
-    const count = (frame.player_names || []).length || 5;
-    if (robotsPane.children.length !== count) initRobots(count);
     const messageBySlot = {};
-    for (const m of frame.messages || []) messageBySlot[m.slot] = m.text;
-    for (let i = 0; i < count; i++) {
-      const bubble = document.querySelector('#bubble-' + i);
-      const text = messageBySlot[i];
+    for (const m of frame.messages || []) {
+      messageBySlot[m.slot] = (messageBySlot[m.slot] ? messageBySlot[m.slot] + ' ' : '') + m.text;
+    }
+    for (const slot of [...seatLayout.left, ...seatLayout.right]) {
+      const bubble = document.querySelector('#bubble-' + slot);
+      if (!bubble) continue;
+      const text = messageBySlot[slot];
+      const label = '<span class="seat" style="color:' + SEAT_COLORS[slot % SEAT_COLORS.length] +
+        '">A' + slot + '</span> ';
       if (text) {
         bubble.classList.remove('quiet');
-        bubble.innerHTML = '<span class="say">' + esc(text) + '</span>';
+        bubble.innerHTML = '<span class="say">' + label + esc(text) + '</span>';
       } else {
         bubble.classList.add('quiet');
-        bubble.innerHTML = '<span class="say">(silent this turn)</span>';
+        bubble.innerHTML = '<span class="say">' + label + '(silent this turn)</span>';
       }
     }
   }
 
+  // Each team's scoreboard sits directly over the half it is scored on.
+  function renderTeamHeads(frame) {
+    const feedback = frame.team_feedback || [];
+    const teams = frame.teams || [];
+    if (!seatLayout.versus || !teams.length) return;
+    const best = Math.max(...feedback.map(f => (f && f.target_score) || 0));
+    const pixels = teams.map(team => {
+      const box = team.region;
+      let count = 0;
+      frame.canvas.forEach((color, i) => {
+        const x = i % frame.width, y = Math.floor(i / frame.width);
+        if (color !== WHITE && x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height) count++;
+      });
+      return count;
+    });
+    document.querySelector('#teamheads').innerHTML = teams.map((team, k) => {
+      const f = feedback[k] || {};
+      const score = f.target_score || 0;
+      const delta = f.score_delta || 0;
+      const parts = f.components
+        ? Object.entries(f.components).map(([n, v]) => n + ' ' + (100 * v).toFixed(0) + '%').join(' &middot; ')
+        : '';
+      return '<div class="teamhead" style="--tint:' + TEAM_COLORS[k] + ';border-top-color:' + TEAM_COLORS[k] + '">' +
+        '<span class="who" style="color:' + TEAM_COLORS[k] + '">' + esc(team.name) + '</span>' +
+        '<span class="what">' + esc(team.target) + '</span>' +
+        (score === best && best > 0 ? '<span class="lead">leading</span>' : '') +
+        '<span class="score">' + (100 * score).toFixed(0) + '%</span>' +
+        '<span class="delta" style="color:' + (delta >= 0 ? 'var(--good)' : 'var(--bad)') + '">' +
+        (delta >= 0 ? '+' : '') + (100 * delta).toFixed(0) + '</span>' +
+        '<span class="parts">' + pixels[k] + ' pixels' + (parts ? ' &middot; ' + parts : '') + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
   function drawBoard(frame, previous) {
     const box = document.querySelector('.boardbox');
-    // Fit both axes: a versus canvas is twice as wide as it is tall.
+    // Fit both axes: a versus canvas is twice as wide as it is tall. The stack
+    // below the canvas (last action + score line) needs about 70px.
     const cell = Math.max(
       6,
-      Math.floor(Math.min((box.clientWidth - 8) / frame.width, (box.clientHeight - 8) / frame.height))
+      Math.floor(Math.min((box.clientWidth - 8) / frame.width, (box.clientHeight - 78) / frame.height))
     );
     const size = { w: frame.width * cell + 1, h: frame.height * cell + 1 };
     const scale = window.devicePixelRatio || 1;
     board.width = size.w * scale; board.height = size.h * scale;
     board.style.width = size.w + 'px'; board.style.height = size.h + 'px';
+    // The scoreboards line up with the halves they score.
+    document.querySelector('#teamheads').style.width = size.w + 'px';
     boardCtx.setTransform(scale, 0, 0, scale, 0, 0);
     boardCtx.fillStyle = '#FFFFFF';
     boardCtx.fillRect(0, 0, size.w, size.h);
@@ -169,18 +332,20 @@
           const r = parseInt(color.slice(1, 3), 16), g = parseInt(color.slice(3, 5), 16), b = parseInt(color.slice(5, 7), 16);
           boardCtx.fillStyle = 0.299 * r + 0.587 * g + 0.114 * b > 140 ? '#26221A' : '#FFFFFF';
           boardCtx.font = '700 ' + Math.max(8, Math.floor(cell * 0.45)) + 'px ui-monospace, Menlo, monospace';
-          boardCtx.fillText(String(owner + 1), x * cell + cell / 2 + 0.5, y * cell + cell / 2 + 1);
+          boardCtx.fillText(String(owner), x * cell + cell / 2 + 0.5, y * cell + cell / 2 + 1);
         }
       }
       if (previous && previous.canvas[i] !== color) changed.push(i);
     }
-    // Seam between the two independently scored halves of a versus canvas.
+    // Seam between the two independently scored halves.
     const teams = frame.teams || [];
     if (teams.length === 2) {
       const seam = teams[1].region.x * cell + 0.5;
       boardCtx.strokeStyle = '#7A7466';
       boardCtx.lineWidth = 2;
+      boardCtx.setLineDash([6, 4]);
       boardCtx.beginPath(); boardCtx.moveTo(seam, 0); boardCtx.lineTo(seam, size.h); boardCtx.stroke();
+      boardCtx.setLineDash([]);
     }
     boardCtx.strokeStyle = '#26221A';
     boardCtx.lineWidth = 2;
@@ -188,20 +353,23 @@
       const x = i % frame.width, y = Math.floor(i / frame.width);
       boardCtx.strokeRect(x * cell + 1.5, y * cell + 1.5, cell - 2, cell - 2);
     }
-    const names = frame.player_names || [];
     const acts = changed.map(i => {
       const owner = frame.owners ? frame.owners[i] : null;
-      const who = owner === null || owner === undefined || owner < 0 ? 'someone' : 'seat ' + owner;
+      const who = owner === null || owner === undefined || owner < 0 ? 'someone' : 'agent ' + owner;
       const verb = frame.canvas[i] === WHITE ? 'erased' : 'painted';
-      return who + ' ' + verb + ' (' + (i % frame.width) + ',' + Math.floor(i / frame.width) + ')';
+      const inside = teams.length === 2
+        ? (i % frame.width) < teams[1].region.x ? teams[0].name : teams[1].name
+        : null;
+      return who + ' ' + verb + ' (' + (i % frame.width) + ',' + Math.floor(i / frame.width) + ')' +
+        (inside ? ' in ' + inside : '');
     });
-    document.querySelector('#lastaction').textContent = acts.length ? acts.join(' · ') : 'no accepted writes this turn';
-    document.querySelector('#canvastitle').textContent = 'Canvas ' + frame.width + '×' + frame.height;
+    document.querySelector('#lastaction').textContent =
+      acts.length ? acts.join(' · ') : 'no accepted writes this turn';
   }
 
   function drawSpark(series, threshold, currentIndex, turnsPerRound, colors) {
     const scale = window.devicePixelRatio || 1;
-    const w = spark.clientWidth || 500, h = 54;
+    const w = spark.clientWidth || 500, h = 46;
     spark.width = w * scale; spark.height = h * scale;
     spark.style.height = h + 'px';
     const ctx = spark.getContext('2d');
@@ -230,7 +398,7 @@
       if (!scores.length) return;
       const color = (colors && colors[k]) || '#B45309';
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
       scores.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
       ctx.stroke();
@@ -241,19 +409,8 @@
     });
   }
 
-  function renderFeedback(feedback, frame) {
+  function renderFeedback(feedback) {
     const el = document.querySelector('#feedback');
-    const teamFeedback = (frame && frame.team_feedback) || null;
-    if (teamFeedback && teamFeedback.length === 2) {
-      const best = Math.max(...teamFeedback.map(f => f.target_score || 0));
-      el.innerHTML = teamFeedback.map((f, k) =>
-        '<span style="color:' + TEAM_COLORS[k] + '">&#9632;</span> ' + esc(f.name) +
-        ' &middot; ' + esc(f.target) + ' <strong class="' + ((f.target_score || 0) === best ? 'pass' : '') + '">' +
-        (100 * (f.target_score || 0)).toFixed(1) + '%</strong>' +
-        ' (&Delta; ' + (100 * (f.score_delta || 0)).toFixed(1) + ')'
-      ).join(' &nbsp;|&nbsp; ') + ' &middot; the FINAL turn decides the winner';
-      return;
-    }
     if (!feedback) { el.textContent = 'Image-model feedback: unavailable'; return; }
     el.innerHTML =
       '<span class="' + (feedback.passing ? 'pass' : 'fail') + '">' + (feedback.passing ? 'PASSING' : 'NOT PASSING') + '</span>' +
@@ -264,15 +421,16 @@
   }
 
   function showFrame(frame, previous, series, scoreIndex) {
+    layoutSeats(frame);
     const teams = frame.teams || [];
-    document.querySelector('#target').textContent =
-      teams.length ? teams.map(t => t.target).join(' vs ') : frame.target;
+    document.querySelector('#target').textContent = frame.target;
     document.querySelector('#turn').textContent = frame.turn;
     document.querySelector('#max-turns').textContent = frame.max_turns;
     document.querySelector('#roundlabel').textContent =
       frame.rounds > 1 ? 'Round ' + frame.round + '/' + frame.rounds + ' · ' : '';
     drawBoard(frame, previous);
-    renderFeedback(frame.image_model_feedback, frame);
+    if (teams.length) renderTeamHeads(frame);
+    else renderFeedback(frame.image_model_feedback);
     renderBubbles(frame);
     // A versus episode has no single pass threshold; the higher final score wins.
     const threshold = teams.length || !frame.image_model_feedback
@@ -297,7 +455,6 @@
     showFrame(frame, previous, replayScores(), frameIndex);
     timeline.value = frameIndex;
     document.querySelector('#framelabel').textContent = 'frame ' + (frameIndex + 1) + '/' + frames.length;
-    document.querySelector('#framestamp').textContent = 'replay';
     status.textContent = 'Replay';
   }
 
@@ -329,7 +486,6 @@
     });
     showFrame(payload, previousLiveFrame, liveScores);
     previousLiveFrame = payload;
-    document.querySelector('#framestamp').textContent = payload.done ? 'episode complete' : 'live';
     status.textContent = payload.done ? 'Episode complete' : 'Live';
   }
 
@@ -391,7 +547,7 @@
       ctx.fillRect((i % frame.width) * cell, Math.floor(i / frame.width) * cell, cell, cell);
     });
     const link = document.createElement('a');
-    link.download = 'coplace-' + frame.target + '.png';
+    link.download = 'coplace-' + frame.target.replace(/\s+/g, '-') + '.png';
     link.href = output.toDataURL('image/png');
     link.click();
   });

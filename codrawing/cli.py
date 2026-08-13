@@ -64,7 +64,11 @@ async def run(
     tokens = [secrets.token_hex(8) for _ in range(seats)]
     config = {
         "tokens": tokens,
-        "players": [{"name": f"Agent {index + 1}"} for index in range(seats)],
+        # Versus seats are named by slot, matching what the prompt calls them
+        # ("you are agent 3") and what agents call each other on the board.
+        "players": [
+            {"name": f"Agent {index if teams else index + 1}"} for index in range(seats)
+        ],
         "width": width,
         "height": height,
         "max_turns": turns,
@@ -93,6 +97,11 @@ async def run(
             REPO_ROOT / "codrawing" / "game" / "models" / "quickdraw_prototypes.json"
         ),
         "CODRAWING_SCORER": scorer,
+        # CLIP scores by softmax over a label set, so every target in the
+        # episode must be in it — including the opponent's.
+        "CODRAWING_SCORER_LABELS": ",".join(
+            [team["target"] for team in teams] if teams else [target]
+        ),
     }
     server_log = open(run_dir / "server.log", "w")
     server = await asyncio.create_subprocess_exec(
@@ -186,11 +195,12 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8331)
     parser.add_argument(
         "--scorer",
-        choices=["quickdraw", "mobileclip", "judge"],
+        choices=["quickdraw", "mobileclip", "judge", "both"],
         default="quickdraw",
         help="canvas grader: quickdraw prototypes (default), MobileCLIP2-S0 zero-shot "
-        "(open vocabulary; needs the mobileclip extra), or judge (a vision LLM scores "
-        "the canvas 0-100 with a rubric that rewards correct scene context)",
+        "(open vocabulary; needs the mobileclip extra), judge (a vision LLM scores "
+        "the canvas 0-100 with a rubric that rewards correct scene context), or both "
+        "(mean of judge and CLIP, which halves the judge's sampling noise)",
     )
     args = parser.parse_args()
 
@@ -230,9 +240,10 @@ def versus_main() -> None:
     parser.add_argument("--port", type=int, default=8332)
     parser.add_argument(
         "--scorer",
-        choices=["judge", "mobileclip", "quickdraw"],
-        default="judge",
-        help="grader for each half (default judge: a vision LLM scores each half 0-100)",
+        choices=["both", "judge", "mobileclip", "quickdraw"],
+        default="both",
+        help="grader for each half (default both: the mean of a vision-LLM judge and the "
+        "deterministic CLIP score, which halves the judge's turn-to-turn noise)",
     )
     args = parser.parse_args()
 

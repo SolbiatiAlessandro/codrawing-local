@@ -72,9 +72,8 @@ public.
   or misleading. The game enforces nothing that is said.
 
 Options: `--seats-per-team` (default 4), `--half-size` (default 32, so the
-canvas is 64x32), `--scorer` (default `judge`), `--model`, `--policy` /
-`--policy-file`, `--turns`. The default `judge` scorer calls a vision model
-once per half per turn, so any target string works. Artifacts land in
+canvas is 64x32), `--scorer` (default `both`), `--model`, `--policy` /
+`--policy-file`, `--turns`. Artifacts land in
 `runs/versus-<left>-vs-<right>-<timestamp>/` with the same report page,
 showing one score line per team and a winner.
 
@@ -115,14 +114,25 @@ live state and `/replay` for saved replays (see `docs/global-protocol.md`).
 - The classifier is a shared noisy sensor. Agents see the target score, its
   delta, and the top predictions after every turn, and must infer the
   scorer's behavior from score changes.
-- Two scorers are available. The default is the bundled Quick, Draw!
-  nearest-prototype model (10 fixed classes, threshold 0.95). Pass
-  `--scorer mobileclip` for apple/MobileCLIP2-S0 zero-shot: any target
-  string works (open vocabulary), thresholds are calibrated against real
-  human sketches where measured (draw at least as well as the median
-  human; light bulb 0.547), and inference auto-selects GPU (CUDA/MPS).
-  Needs `uv pip install -e ".[mobileclip]"`; weights (~150 MB) download
-  from Hugging Face on first use.
+- Four scorers are available:
+  - `quickdraw` (default for `codrawing-run`): the bundled Quick, Draw!
+    nearest-prototype model, 10 fixed classes, threshold 0.95, pure Python.
+  - `mobileclip`: apple/MobileCLIP2-S0 zero-shot. Any target string works
+    (open vocabulary), thresholds are calibrated against real human sketches
+    where measured (draw at least as well as the median human; light bulb
+    0.547), inference auto-selects GPU (CUDA/MPS). Needs
+    `uv pip install -e ".[mobileclip]"`; weights (~150 MB) download from
+    Hugging Face on first use.
+  - `judge`: a vision LLM grades the canvas 0-100 against a rubric that
+    rewards a coherent scene, median of 3 samples.
+  - `both` (default for `codrawing-versus`): the mean of `judge` and
+    `mobileclip`. The judge samples, so it swings ~10 points between turns
+    on an *unchanged* canvas (measured), which is too noisy to decide an
+    episode on a final score. CLIP is deterministic and acts as a
+    class-membership gate — 0.999 on an intact drawing, 0.007 on a blank
+    canvas, collapsing to 0.21 once half the pixels are erased — so the mean
+    keeps the judge's sense of quality at half its variance. Both component
+    scores are reported to players and shown in the report.
 - The recorded team score is the best score ever reached in the episode.
 
 The wire protocol for writing your own player is in

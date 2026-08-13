@@ -256,6 +256,10 @@ const versus = TEAMS.length === 2;
 const TEAM_COLORS = ["#D97706", "#3B82F6"];
 const teamOf = {};
 TEAMS.forEach((t, i) => t.slots.forEach(s => { teamOf[s] = i; }));
+// Seats are named by slot in versus runs: the prompts, the transcripts, and
+// the live viewer all say "agent 0".."agent 7", so the report must too.
+function seatName(slot) { return versus ? "Agent " + slot : (names[slot] || ("Agent " + slot)); }
+function cellLabel(owner) { return String(versus ? owner : owner + 1); }
 function teamScores(i) {
   return (frames[i].team_feedback || []).map(f => (f && f.target_score) || 0);
 }
@@ -347,7 +351,7 @@ document.getElementById("stats").innerHTML = stats.map(([k, v, cls]) =>
 ).join("");
 
 document.getElementById("legend").innerHTML = names.map((n, i) =>
-  '<span><span class="chip" style="background:' + SEATS[i % SEATS.length] + '"></span>' + esc(n) +
+  '<span><span class="chip" style="background:' + SEATS[i % SEATS.length] + '"></span>' + esc(seatName(i)) +
   (versus && teamOf[i] !== undefined ? " (" + esc(TEAMS[teamOf[i]].name) + ")" : "") + "</span>"
 ).join("");
 
@@ -382,7 +386,7 @@ function show(f) {
     const owner = frame.owners ? frame.owners[i] : -1;
     cells[i].style.background = color === WHITE ? "" : color;
     if (color !== WHITE && owner >= 0) {
-      cells[i].textContent = String(owner + 1);
+      cells[i].textContent = cellLabel(owner);
       cells[i].style.color = inkFor(color);
     } else {
       cells[i].textContent = "";
@@ -397,7 +401,7 @@ function show(f) {
 
   const acts = changed.map(i => {
     const owner = frame.owners ? frame.owners[i] : null;
-    const who = owner === null || owner === undefined || owner < 0 ? "?" : names[owner];
+    const who = owner === null || owner === undefined || owner < 0 ? "?" : seatName(owner);
     const verb = frame.canvas[i] === WHITE ? "erased" : "painted";
     return who + " " + verb + " (" + (i % W) + "," + Math.floor(i / W) + ")";
   });
@@ -422,7 +426,7 @@ function show(f) {
         : '<span class="tag">' + esc((TEAMS[m.team] || {}).name || "team") + "</span>";
       feed.push('<div class="msg' + (i === f ? " now" : "") + '">' +
         '<span class="chip" style="background:' + SEATS[m.slot % SEATS.length] + '"></span>' + tag +
-        '<span class="who">T' + frames[i].turn + " " + esc(m.player) + "</span><span>" + esc(m.text) + "</span></div>");
+        '<span class="who">T' + frames[i].turn + " " + esc(seatName(m.slot)) + "</span><span>" + esc(m.text) + "</span></div>");
     }
   }
   const msgs = document.getElementById("msgs");
@@ -544,7 +548,7 @@ function tipHtml(i) {
     const u = frameUsage(frame.turn);
     for (const slot of Object.keys(u.tokens))
       rows.push('<span class="chip" style="display:inline-block;background:' + SEATS[slot % SEATS.length] + '"></span> ' +
-        esc(names[slot]) + ": " + fmtTokens(u.tokens[slot]) + " out, " +
+        esc(seatName(slot)) + ": " + fmtTokens(u.tokens[slot]) + " out, " +
         ((u.bySlot[slot] || {}).wall_seconds || 0).toFixed(1) + "s");
   }
   return rows.join("<br>");
@@ -582,7 +586,7 @@ if (hasTraces) {
     const text = (interview.events || []).filter(e => e.type === "text").map(eventHtml).join("");
     return '<div class="tturn interview"><div class="tthead"><span class="chip" ' +
       'style="display:inline-block;background:' + SEATS[slot % SEATS.length] + '"></span> ' +
-      esc(names[slot] || ("Agent " + slot)) +
+      esc(seatName(slot)) +
       (versus && teamOf[slot] !== undefined ? " \\u00b7 " + esc(TEAMS[teamOf[slot]].name) : "") +
       "</div>" + (text || '<p class="ev">(no answer)</p>') + "</div>";
   }).join("");
@@ -611,7 +615,7 @@ if (hasTraces) {
       (r.events || []).map(eventHtml).join("") + "</div>"
     ).join("");
     return '<details class="agent"><summary><span class="chip" style="background:' + SEATS[slot % SEATS.length] + '"></span>' +
-      esc(names[slot] || ("Agent " + slot)) +
+      esc(seatName(slot)) +
       (versus && teamOf[slot] !== undefined ? " \\u00b7 " + esc(TEAMS[teamOf[slot]].name) : "") +
       '<span class="meta">painted ' + painted + "/" + recs.length + " turns \\u00b7 " + fmtTokens(out) +
       " tokens out \\u00b7 " + (cost ? "$" + cost.toFixed(2) + " \\u00b7 " : "") +
@@ -670,7 +674,12 @@ def render(input_path: Path, output_path: Path | None = None) -> Path:
     run_dir, replay, results, traces = load_run(input_path)
     if output_path is None:
         output_path = run_dir / "report.html"
-    title = "codrawing replay: " + replay["frames"][0]["target"]
+    teams = replay["frames"][0].get("teams")
+    title = (
+        " vs ".join(team["target"].title() for team in teams)
+        if teams
+        else "codrawing replay: " + replay["frames"][0]["target"]
+    )
     payload = json.dumps(
         {"frames": replay["frames"], "results": results, "traces": traces},
         separators=(",", ":"),

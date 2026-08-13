@@ -391,9 +391,15 @@ async def complete(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def score_line(feedback: dict[str, Any]) -> str:
+    components = feedback.get("components")
+    parts = (
+        " [" + ", ".join(f"{name} {value:.2f}" for name, value in components.items()) + "]"
+        if components
+        else ""
+    )
     return (
-        f"{feedback['target_score']:.4f} (delta {feedback['score_delta']:+.4f}), "
-        f"top: {', '.join(p['label'] for p in feedback.get('top_predictions', [])[:3])}"
+        f"{feedback['target_score']:.4f} (delta {feedback['score_delta']:+.4f}){parts}, "
+        f"reads as: {', '.join(p['label'] for p in feedback.get('top_predictions', [])[:3])}"
     )
 
 
@@ -426,9 +432,24 @@ def versus_observation_text(observation: dict[str, Any], slot: int) -> str:
     if len(scores) == 2 and all("target_score" in entry for entry in scores):
         gap = scores[index]["target_score"] - scores[1 - index]["target_score"]
         standing = f"you are {'AHEAD' if gap > 0 else 'BEHIND' if gap < 0 else 'LEVEL'} by {abs(gap):.4f}"
-    turns_left = observation["max_turns"] - observation["turn"]
+    # Turns are 0-indexed on the wire. Showing that number raw made a team
+    # hold its endgame attack for a "turn 20" that never came, so the count is
+    # 1-indexed here and the last turn says so in as many words.
+    turn_number = observation["turn"] + 1
+    turns_after = observation["max_turns"] - turn_number
+    if turns_after == 0:
+        clock = (
+            f"Turn {turn_number} of {observation['max_turns']}. THIS IS THE FINAL TURN: there is "
+            "no turn after this one. The score once this turn resolves is what decides the winner."
+        )
+    else:
+        clock = (
+            f"Turn {turn_number} of {observation['max_turns']} ({turns_after} more turn"
+            f"{'' if turns_after == 1 else 's'} after this one; only the score after the FINAL "
+            "turn counts)."
+        )
 
-    return f"""Turn {observation['turn']} of {observation['max_turns']} ({turns_left} turns left; only the score after the FINAL turn counts).
+    return f"""{clock}
 Scores: {standing}
 {chr(10).join(lines) or 'no scorer feedback'}
 Last turn accepted agents: {observation.get('previous_accepted_slots', [])}; collided (dropped): {observation.get('previous_collision_slots', [])}.
