@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>codrawing arena</title>
+<style>
+  /* A broadcast overlay: a lit board on a dark table. Single-theme on
+     purpose — every colour is painted, nothing inherits from the host. */
+  :root {
+    --ground:#0B0F14; --table:#121821; --panel:#171E28; --raised:#1E2632;
+    --line:#2A3441; --ink:#E7EDF5; --muted:#8798AB;
+    --teamA:#F5A524; --teamB:#38BDF8; --danger:#FB5D75; --good:#3DDC97;
+    --board:#F7F4EC;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+  main{height:100vh;max-width:1920px;margin:0 auto;padding:10px 16px 12px;display:grid;grid-template-rows:auto auto 1fr auto;gap:10px}
+
+  .hud{display:grid;grid-template-columns:1fr auto 1fr;gap:12px}
+  .side{--team:var(--line);background:linear-gradient(180deg,var(--panel),var(--table));
+    border:1px solid var(--line);border-top:3px solid var(--team);border-radius:10px;
+    padding:10px 16px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 14px;min-width:0}
+  .side.b{grid-template-columns:auto 1fr;text-align:right}
+  .side.b .who{order:2}.side.b .score{order:1}.side.b .tags{order:3;justify-content:flex-end}
+  .who{min-width:0}
+  .nm{font-size:15px;font-weight:800;letter-spacing:.18em;color:var(--team);text-transform:uppercase}
+  .tg{font-size:15px;font-weight:600;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .score{font-family:var(--mono);font-size:44px;font-weight:700;line-height:.9;font-variant-numeric:tabular-nums;color:var(--team)}
+  .score .pct{font-size:18px;opacity:.65}
+  .score .dl{display:block;font-size:12px;font-weight:700;margin-top:3px}
+  .tags{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+  .chip{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    background:var(--raised);border:1px solid var(--line);border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .chip.hit{color:var(--danger);border-color:var(--danger)}
+  .chip.win{color:var(--ground);background:var(--good);border-color:var(--good)}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:132px}
+  .vs{font-size:20px;font-weight:800;letter-spacing:.12em;color:var(--muted);border:2px solid var(--line);border-radius:999px;padding:3px 14px}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.08em}
+  .clock b{color:var(--ink);font-size:15px}
+  .rule{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+  .tug{display:flex;height:8px;border-radius:999px;overflow:hidden;background:var(--line)}
+  .tug i{display:block;transition:width .35s cubic-bezier(.22,1,.36,1)}
+
+  .arena{display:grid;grid-template-columns:200px minmax(0,1fr) 200px;gap:10px;min-height:0}
+  .roster{display:flex;flex-direction:column;gap:7px;min-height:0;overflow-y:auto}
+  .rostername{font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--team,var(--muted));padding-bottom:2px}
+  .roster.right .rostername{text-align:right}
+  .pc{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--seat,var(--line));
+    border-radius:8px;padding:7px 9px;display:grid;grid-template-columns:26px 1fr;gap:8px;min-width:0}
+  .roster.right .pc{border-left:1px solid var(--line);border-right:3px solid var(--seat,var(--line))}
+  .pc.acted{background:var(--raised)}
+  .dot{width:26px;height:26px;border-radius:50%;background:var(--seat);align-self:start}
+  .pchead{display:flex;align-items:baseline;gap:6px}
+  .pcname{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--seat)}
+  .pcstat{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-left:auto}
+  .pcstat .atk{color:var(--danger)}
+  .pcsay{font-size:11px;line-height:1.45;margin-top:3px;max-height:76px;overflow-y:auto;overflow-wrap:anywhere}
+  .pcsay.old{color:var(--muted)}
+  .pcsay .stamp{color:var(--muted);font-family:var(--mono);font-size:9.5px}
+
+  .stage{background:var(--table);border:1px solid var(--line);border-radius:12px;
+    display:flex;align-items:center;justify-content:center;min-height:0;padding:10px;position:relative}
+  canvas#board{display:block;background:var(--board);border-radius:4px;image-rendering:pixelated;
+    box-shadow:0 10px 30px rgba(0,0,0,.45),0 0 0 1px var(--line)}
+  .banner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .banner[hidden]{display:none}
+  .banner span{font-size:34px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--ground);
+    background:var(--win,var(--good));padding:12px 34px;border-radius:8px;transform:rotate(-3deg);
+    box-shadow:0 14px 40px rgba(0,0,0,.55)}
+
+  .footer{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,34%);gap:12px}
+  .feed{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;height:104px;
+    overflow-y:auto;font-family:var(--mono);font-size:11px;line-height:1.6}
+  .ev{display:flex;gap:8px;align-items:baseline}
+  .ev .t{color:var(--muted);flex:none}
+  .ev .tag{font-size:9px;font-weight:800;letter-spacing:.1em;padding:0 5px;border-radius:3px;flex:none;color:var(--ground);background:var(--danger)}
+  .ev.raid{color:var(--danger)}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px 4px;height:104px;display:flex;flex-direction:column}
+  .chartname{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+  #spark{width:100%;flex:1;display:block;min-height:0}
+
+  .controls{display:flex;gap:10px;align-items:center}
+  .controls button{font:inherit;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--ink);
+    background:var(--raised);border:1px solid var(--line);border-radius:6px;padding:6px 16px;cursor:pointer}
+  .controls button:hover{border-color:var(--muted)}
+  .controls input[type=range]{flex:1;accent-color:var(--teamA)}
+  .framelabel{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:96px;text-align:right}
+  #status{color:var(--muted);font-size:12px}
+  @media (max-width:1180px){body{overflow:auto}main{height:auto}.arena{grid-template-columns:1fr}.footer{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <div class="hud">
+    <div class="side a" id="side-a"></div>
+    <div class="center">
+      <div class="clock">TURN <b id="turn">0</b> / <span id="max-turns">0</span></div>
+      <div class="vs">VS</div>
+      <div id="status">loading</div>
+      <div class="rule">final turn decides</div>
+    </div>
+    <div class="side b" id="side-b"></div>
+  </div>
+
+  <div class="tug"><i id="tug-a"></i><i id="tug-b"></i></div>
+
+  <div class="arena">
+    <aside class="roster left" id="roster-left"></aside>
+    <section class="stage">
+      <canvas id="board"></canvas>
+      <div class="banner" id="banner" hidden><span id="banner-text"></span></div>
+    </section>
+    <aside class="roster right" id="roster-right"></aside>
+  </div>
+
+  <div class="footer">
+    <div class="feed" id="feed"></div>
+    <div class="chartbox">
+      <div class="chartname"><span>Score by turn</span><span id="charthint"></span></div>
+      <canvas id="spark"></canvas>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="play">Pause</button>
+    <input type="range" id="timeline" min="0" max="0" value="0">
+    <span class="framelabel" id="framelabel"></span>
+  </div>
+</main>
+
+<script src="./arena.js"></script>
+</body>
+</html>

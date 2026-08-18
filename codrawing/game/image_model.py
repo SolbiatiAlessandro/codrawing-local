@@ -572,7 +572,16 @@ class TargetScorerRouter:
         raise ValueError(f"image model has no target mapping for {target!r}")
 
 
-def scorer_from_environment() -> TargetScorerRouter | None:
+def scorer_from_environment(
+    episode_labels: tuple[str, ...] = (),
+) -> TargetScorerRouter | None:
+    """Build the configured scorer.
+
+    `episode_labels` are the targets this episode actually plays for. They are
+    always added to CLIP's label set: a CLIP score is a softmax over the labels
+    it is shown, so in an adversarial episode each half has to be scored
+    against the opponent's target as well as its own, or both saturate.
+    """
     model_path = os.environ.get("CODRAWING_IMAGE_MODEL")
     quickdraw_override = os.environ.get("CODRAWING_QUICKDRAW_MODEL")
     scorer_name = os.environ.get("CODRAWING_SCORER", "").lower()
@@ -588,11 +597,12 @@ def scorer_from_environment() -> TargetScorerRouter | None:
     quickdraw_path = Path(quickdraw_override) if quickdraw_override else QUICKDRAW_MODEL_PATH
     # Every episode target belongs in CLIP's label set: its score is a softmax
     # and only discriminates against the labels it is given.
-    clip_labels = tuple(
+    configured = tuple(
         label.strip()
         for label in os.environ.get("CODRAWING_SCORER_LABELS", "").split(",")
         if label.strip()
     )
+    clip_labels = tuple(dict.fromkeys((*configured, *episode_labels)))
     return TargetScorerRouter(
         Path(model_path) if model_path else None,
         Path(labels_path) if labels_path else None,

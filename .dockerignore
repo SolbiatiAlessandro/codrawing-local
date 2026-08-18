@@ -1,0 +1,13 @@
+.git
+runs/
+output/
+build/
+dist/
+tests/
+scripts/
+docs/
+**/__pycache__
+*.log
+.dockerignore
+Dockerfile
+compose.yaml

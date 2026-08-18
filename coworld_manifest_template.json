@@ -1,0 +1,306 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Metta-AI/coworld/main/src/coworld/coworld_manifest_schema.json",
+  "tags": ["adversarial", "competitive", "turn-based", "pixel-art", "multi-agent"],
+  "game": {
+    "name": "coplace-versus",
+    "description": "Adversarial co/place: two teams of four agents share one canvas and are given different drawing targets. Each team's rectangle is cropped and scored on its own every turn by a frozen MobileCLIP2 classifier. Regions are scoring boundaries, not painting restrictions - any seat may paint or erase any pixel, including inside the other team's half - and only the score on the FINAL turn decides the winner, so a lead can be taken away and must be defended.",
+    "owner": "Alessandro",
+    "runnable": {
+      "type": "game",
+      "image": "{{CODRAWING_VERSUS_IMAGE}}",
+      "run": ["python", "-m", "codrawing.game.server"]
+    },
+    "replay_viewer": {
+      "bundle": "build/static-replay-viewer"
+    },
+    "config_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens", "players", "teams", "width", "height", "max_turns"],
+      "properties": {
+        "tokens": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "players": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {"name": {"type": "string", "minLength": 1}}
+          }
+        },
+        "teams": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "target", "region", "slots"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "target": {"type": "string", "minLength": 1},
+              "region": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["x", "y", "width", "height"],
+                "properties": {
+                  "x": {"type": "integer", "minimum": 0},
+                  "y": {"type": "integer", "minimum": 0},
+                  "width": {"type": "integer", "minimum": 1},
+                  "height": {"type": "integer", "minimum": 1}
+                }
+              },
+              "slots": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"type": "integer", "minimum": 0}
+              }
+            }
+          }
+        },
+        "width": {"type": "integer", "minimum": 8, "maximum": 96},
+        "height": {"type": "integer", "minimum": 8, "maximum": 96},
+        "max_turns": {"type": "integer", "minimum": 1, "maximum": 200},
+        "turns_per_round": {"type": "integer", "minimum": 1, "maximum": 200},
+        "checkpoint_every_turns": {"type": "integer", "minimum": 1, "maximum": 200},
+        "seed": {"type": "integer"},
+        "player_connect_timeout_seconds": {"type": "number", "minimum": 0, "default": 180},
+        "action_timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 600, "default": 60}
+      }
+    },
+    "results_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "$defs": {
+        "prediction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["label", "probability"],
+          "properties": {
+            "label": {"type": "string"},
+            "probability": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "feedback": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["model", "turn", "target_score"],
+          "properties": {
+            "model": {"type": "string"},
+            "turn": {"type": "integer", "minimum": 0},
+            "target_score": {"type": "number", "minimum": 0, "maximum": 1},
+            "score_delta": {"type": "number", "minimum": -1, "maximum": 1},
+            "pass_threshold": {"type": ["number", "null"]},
+            "passing": {"type": "boolean"},
+            "target_rank": {"type": "integer", "minimum": 1},
+            "label_count": {"type": "integer", "minimum": 2},
+            "best_target_label": {"type": "string"},
+            "top_predictions": {"type": "array", "items": {"$ref": "#/$defs/prediction"}}
+          }
+        }
+      },
+      "required": [
+        "scores", "target", "teams", "turns", "max_turns", "completed_slots",
+        "ended_by_agents", "accepted_pixels", "final_canvas",
+        "winner", "winner_name", "final_scores"
+      ],
+      "properties": {
+        "scores": {"type": "array", "items": {"type": "number"}},
+        "target": {"type": "string"},
+        "teams": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "target", "region", "slots", "accepted_pixels", "final_score", "best_score"],
+            "properties": {
+              "name": {"type": "string"},
+              "target": {"type": "string"},
+              "region": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["x", "y", "width", "height"],
+                "properties": {
+                  "x": {"type": "integer"}, "y": {"type": "integer"},
+                  "width": {"type": "integer"}, "height": {"type": "integer"}
+                }
+              },
+              "slots": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+              "accepted_pixels": {"type": "integer", "minimum": 0},
+              "final_score": {"type": "number", "minimum": 0, "maximum": 1},
+              "best_score": {"type": "number", "minimum": 0, "maximum": 1},
+              "round_scores": {"type": "array", "items": {"type": "number"}},
+              "score_trace": {"type": "array", "items": {"$ref": "#/$defs/feedback"}},
+              "final_feedback": {"anyOf": [{"$ref": "#/$defs/feedback"}, {"type": "null"}]},
+              "pass_threshold": {"type": ["number", "null"]}
+            }
+          }
+        },
+        "turns": {"type": "integer", "minimum": 0},
+        "max_turns": {"type": "integer", "minimum": 1},
+        "completed_slots": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "ended_by_agents": {"type": "boolean"},
+        "accepted_pixels": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "final_canvas": {"type": "array", "items": {"type": "string", "pattern": "^#[0-9A-F]{6}$"}},
+        "image_model": {"type": ["string", "null"]},
+        "winner": {"type": ["integer", "null"], "minimum": 0},
+        "winner_name": {"type": "string"},
+        "final_scores": {"type": "array", "items": {"type": "number"}}
+      }
+    },
+    "protocols": {
+      "player": {
+        "type": "text",
+        "value": "# Player protocol\n\nConnect a websocket to `/player?slot=<n>&token=<token>` using the slot and token handed to your policy.\n\n## Messages you receive\n\n1. `{\"type\": \"welcome\", \"slot\": <int>, \"players\": [<name>, ...]}` once, on connect.\n2. `{\"type\": \"observation\", ...}` at the start of every turn.\n3. `{\"type\": \"final\", ...}` once, when the episode ends. Disconnect after this.\n\nAn observation carries the whole shared board:\n\n- `turn`, `max_turns` - the turn about to be played, zero indexed.\n- `width`, `height` - canvas size.\n- `canvas` - `width * height` hex colour strings, row major. `#FFFFFF` is blank.\n- `owners` - the slot that last painted each pixel, or -1.\n- `teams` - one entry per team: `name`, `target`, `region` (`x`, `y`, `width`, `height`) and `slots`. Find your own team by locating your slot in a team's `slots`.\n- `team_feedback` - one entry per team with `target_score` and `score_delta` from the classifier, so both sides see both scores.\n- `recent_messages` - board posts visible to you.\n- `accepted_pixels`, `player_names`, `done`.\n\n## Messages you send\n\nOne paint action per turn:\n\n```json\n{\"turn\": 7, \"paint\": {\"x\": 3, \"y\": 11, \"color\": \"#D81E2C\"}, \"message\": \"optional\"}\n```\n\n- `turn` must equal the observation's `turn` or the action is discarded as stale.\n- Only your first action of a turn counts.\n- Omit `paint` to pass.\n- Paint `#FFFFFF` to erase a pixel.\n\nA board post outside the paint barrier:\n\n```json\n{\"type\": \"message\", \"turn\": 7, \"text\": \"...\", \"public\": false}\n```\n\nA post reaches only your own team unless `public` is true.\n\nA standing vote to end early:\n\n```json\n{\"type\": \"complete\", \"turn\": 7}\n```\n\n## Turn resolution\n\nThe turn is a barrier: it resolves once every connected, not-completed seat has submitted, so a slow policy never costs another seat its write. All writes then apply simultaneously. If two or more seats target the same pixel in the same turn, every one of those writes is dropped and the pixel keeps its previous colour - contention destroys value for both sides."
+      },
+      "global": {
+        "type": "text",
+        "value": "# Global protocol\n\nConnect a websocket to `/global` to observe an episode. The server sends a full state snapshot immediately on connect and another after every turn resolves. Nothing you send is read.\n\nA snapshot contains `type`, `turn`, `max_turns`, `width`, `height`, `canvas`, `owners`, `teams`, `team_feedback`, `accepted_pixels`, `player_names`, `messages`, `completed_slots` and `done`. Snapshots additionally carry `accepted_slots` and `collision_slots` for the turn that just resolved, which is what distinguishes a write that landed from one destroyed by contention.\n\n`GET /healthz` returns `{\"ok\": true}` once the server is accepting connections."
+      }
+    },
+    "docs": {
+      "readme": {
+        "type": "text",
+        "value": "# co/place versus\n\nTwo teams of four agents share one canvas. Each team is given a different target word and owns a rectangle of the board. Every turn, each team's rectangle is cropped out and scored on its own by a frozen MobileCLIP2-S0 classifier against that team's target, and both teams see both scores.\n\nEach agent gets one pixel and one board post per turn. Teammates who pick the same pixel in the same turn cancel each other out - all contending writes are dropped.\n\nTwo rules make the game adversarial rather than two drawings side by side:\n\n1. A region is a *scoring* boundary, not a painting one. Any seat may paint or erase any pixel on the shared canvas, including inside the other team's half.\n2. The winner is decided by the score on the FINAL turn, not the best score reached. A peak that could not be taken away would make erasing an opponent's pixels pointless and give nobody a reason to defend a finished drawing.\n\nSo a team can spend its turns drawing, raiding the other half, defending its own, or trading between them - and it has to choose."
+      },
+      "pages": [
+        {
+          "id": "rules.md",
+          "title": "rules.md",
+          "content": {
+            "type": "text",
+            "value": "# Rules\n\n- 8 seats, 2 teams of 4. One shared canvas.\n- Each team has its own target word and its own scored rectangle.\n- Per turn each seat may paint one pixel anywhere on the canvas, and post one message.\n- Painting `#FFFFFF` erases.\n- Simultaneous resolution. If two or more seats write the same pixel in one turn, all of those writes are dropped and the pixel is unchanged.\n- Scoring: each team's rectangle is cropped and scored alone by MobileCLIP2-S0 against that team's target, as a softmax over a label set that always contains both targets.\n- Messages are team-private by default; a seat may post publicly to the other team.\n- The higher score on the final turn wins. A tie is reported as `winner: null`.\n- Seats may vote to end the episode early; the vote must be unanimous among connected seats."
+          }
+        },
+        {
+          "id": "fairness.md",
+          "title": "fairness.md",
+          "content": {
+            "type": "text",
+            "value": "# Fairness\n\nTwo targets are never equally easy to draw at 16x24 pixels, and the classifier does not score them on the same scale. A single episode therefore measures the pairing as much as the policies.\n\nRun a match as two episodes with the targets swapped between the teams, and compare each policy against the same two targets. The variants here are single episodes; the swap is the caller's to arrange."
+          }
+        }
+      ]
+    }
+  },
+  "player": [
+    {
+      "id": "versus-template-baseline",
+      "name": "Versus Template Baseline",
+      "type": "player",
+      "image": "{{CODRAWING_VERSUS_IMAGE}}",
+      "run": ["python", "-m", "codrawing.player.versus_template_player"],
+      "description": "Deterministic no-LLM baseline. Draws a fixed template of its team's target inside its team's own region, split between teammates by stride so they never contend, and never raids the other half. Establishes what honest play scores."
+    }
+  ],
+  "variants": [
+    {
+      "id": "default",
+      "name": "Default",
+      "description": "A 32x24 canvas, 8 agents, 50 turns, pineapple against strawberry.",
+      "game_config": {
+        "width": 32,
+        "height": 24,
+        "max_turns": 50,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {"name": "Team A", "target": "pineapple", "slots": [0, 1, 2, 3],
+           "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
+          {"name": "Team B", "target": "strawberry", "slots": [4, 5, 6, 7],
+           "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+        ],
+        "players": [
+          {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
+          {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+        ]
+      }
+    },
+    {
+      "id": "swapped",
+      "name": "Swapped",
+      "description": "The default pairing with the two targets exchanged. Play both to score a fair match.",
+      "game_config": {
+        "width": 32,
+        "height": 24,
+        "max_turns": 50,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {"name": "Team A", "target": "strawberry", "slots": [0, 1, 2, 3],
+           "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
+          {"name": "Team B", "target": "pineapple", "slots": [4, 5, 6, 7],
+           "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+        ],
+        "players": [
+          {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
+          {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+        ]
+      }
+    },
+    {
+      "id": "sprint",
+      "name": "Sprint",
+      "description": "A 20-turn butterfly against zebra episode, short enough to iterate on.",
+      "game_config": {
+        "width": 32,
+        "height": 24,
+        "max_turns": 20,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {"name": "Team A", "target": "butterfly", "slots": [0, 1, 2, 3],
+           "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
+          {"name": "Team B", "target": "zebra", "slots": [4, 5, 6, 7],
+           "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+        ],
+        "players": [
+          {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
+          {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+        ]
+      }
+    }
+  ],
+  "certification": {
+    "game_config": {
+      "width": 32,
+      "height": 24,
+      "max_turns": 8,
+      "seed": 1,
+      "player_connect_timeout_seconds": 180,
+      "action_timeout_seconds": 60,
+      "teams": [
+        {"name": "Team A", "target": "pineapple", "slots": [0, 1, 2, 3],
+         "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
+        {"name": "Team B", "target": "strawberry", "slots": [4, 5, 6, 7],
+         "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+      ],
+      "players": [
+        {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
+        {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+      ]
+    },
+    "players": [
+      {"player_id": "versus-template-baseline"},
+      {"player_id": "versus-template-baseline"},
+      {"player_id": "versus-template-baseline"},
+      {"player_id": "versus-template-baseline"},
+      {"player_id": "versus-template-baseline"},
+      {"player_id": "versus-template-baseline"},
+      {"player_id": "versus-template-baseline"},
+      {"player_id": "versus-template-baseline"}
+    ]
+  }
+}

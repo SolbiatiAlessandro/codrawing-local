@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import random
 import secrets
 import sys
 import urllib.request
@@ -50,7 +51,10 @@ async def run(
     width: int = 24,
     height: int = 24,
     slug: str | None = None,
+    team_models: list[str] | None = None,
 ) -> Path:
+    """team_models gives each team its own model, so a match can pit one model
+    against another with everything else held equal."""
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     # Parallel launches can share a second; a short suffix keeps dirs unique.
     name = slug or f"agent-{target.replace(' ', '-')}"
@@ -76,6 +80,7 @@ async def run(
         "player_connect_timeout_seconds": 60,
         "action_timeout_seconds": 300,
         "model": model,
+        "team_models": team_models,
         "scorer": scorer,
         "environment": f"{target} · {turns} turns"
         + (f" · {scorer}" if scorer != "quickdraw" else ""),
@@ -115,6 +120,14 @@ async def run(
     try:
         await wait_for_server(port)
         print(f"live viewer: http://127.0.0.1:{port}/client/global", flush=True)
+        def seat_model(slot: int) -> str:
+            if not (teams and team_models):
+                return model
+            for index, team in enumerate(teams):
+                if slot in team["slots"]:
+                    return team_models[index]
+            return model
+
         players, logs = [], []
         for slot in range(seats):
             workspace = run_dir / f"workspace-{slot}"
@@ -124,7 +137,7 @@ async def run(
                 "CODRAWING_PLAYER_WS_URL": (
                     f"ws://127.0.0.1:{port}/player?slot={slot}&token={tokens[slot]}"
                 ),
-                "AGENT_MODEL": model,
+                "AGENT_MODEL": seat_model(slot),
                 "AGENT_WORKSPACE": str(workspace),
                 "AGENT_TRACE_FILE": str(run_dir / f"trace-{slot}.jsonl"),
             }
@@ -161,8 +174,11 @@ async def run(
     print(f"accepted pixels by seat: {results['accepted_pixels']}")
     if results.get("teams"):
         for team in results["teams"]:
+            label = ""
+            if team_models:
+                label = f" [{team_models[results['teams'].index(team)]}]"
             print(
-                f"{team['name']} ({team['target']}): final {team['final_score']:.4f} "
+                f"{team['name']}{label} ({team['target']}): final {team['final_score']:.4f} "
                 f"· best {team['best_score']:.4f} · {team['accepted_pixels']} pixels"
             )
         print(f"WINNER: {results.get('winner_name')}")
@@ -221,6 +237,116 @@ def main() -> None:
     )
 
 
+# Targets with measured behaviour in the judge sweep, so a random pair is
+# drawn from things both scorers are known to recognize.
+TARGET_POOL = (
+    "pineapple", "zebra", "butterfly", "bee", "banana", "strawberry",
+    "ice cream", "traffic light", "candle", "snail",
+)
+
+
+def build_teams(left: str, right: str, per_team: int, half: int) -> list[dict]:
+    return [
+        {
+            "name": f"Team {'AB'[index]}",
+            "target": target,
+            "region": {"x": index * half, "y": 0, "width": half, "height": half},
+            "slots": list(range(index * per_team, (index + 1) * per_team)),
+        }
+        for index, target in enumerate((left, right))
+    ]
+
+
+def match_main() -> None:
+    """Two rounds with the targets swapped, so neither team owns the easier one."""
+    parser = argparse.ArgumentParser(
+        prog="codrawing-match",
+        description="A fair adversarial match: two rounds of the same two targets on a fresh "
+        "canvas, swapped between the teams in round two. Each team therefore draws both "
+        "images, so a target being easier than the other cancels out, and the match is "
+        "decided on each team's total across the two rounds.",
+    )
+    parser.add_argument("--targets", default=None, help="comma-separated pair; default picks two at random")
+    parser.add_argument("--turns", type=int, default=50, help="turns per round")
+    parser.add_argument("--seats-per-team", type=int, default=4)
+    parser.add_argument("--half-size", type=int, default=32)
+    parser.add_argument("--model", default="claude-sonnet-5", help="model for both teams unless overridden")
+    parser.add_argument("--model-a", default=None, help="model for Team A (slots 0..n-1)")
+    parser.add_argument("--model-b", default=None, help="model for Team B")
+    parser.add_argument("--scorer", choices=["both", "judge", "mobileclip", "quickdraw"], default="both")
+    parser.add_argument("--policy-file", default=None)
+    parser.add_argument("--port", type=int, default=8360)
+    parser.add_argument("--seed", type=int, default=None, help="seed for the random target pair")
+    args = parser.parse_args()
+
+    if args.targets:
+        pair = [t.strip() for t in args.targets.split(",") if t.strip()]
+        if len(pair) != 2:
+            parser.error("--targets needs exactly two comma-separated names")
+    else:
+        pair = random.Random(args.seed).sample(TARGET_POOL, 2)
+    policy = Path(args.policy_file).read_text() if args.policy_file else None
+    # Teams keep their models across the swap: the targets move, the models do not,
+    # so each model draws both images and target difficulty cancels out.
+    team_models = [args.model_a or args.model, args.model_b or args.model]
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    match_id = f"match-{pair[0].replace(' ', '-')}-{pair[1].replace(' ', '-')}-{stamp}"
+    print(f"MATCH {match_id}")
+    print(f"  Team A: {team_models[0]}   vs   Team B: {team_models[1]}")
+    print(f"  round 1: Team A {pair[0]} vs Team B {pair[1]}")
+    print(f"  round 2: Team A {pair[1]} vs Team B {pair[0]} (swapped)\n")
+
+    rounds = []
+    for number, (left, right) in enumerate(((pair[0], pair[1]), (pair[1], pair[0])), start=1):
+        print(f"=== round {number}: {left} (left) vs {right} (right)", flush=True)
+        run_dir = asyncio.run(
+            run(
+                seats=args.seats_per_team * 2,
+                turns=args.turns,
+                turns_per_round=None,
+                target=f"{left} vs {right}",
+                model=args.model,
+                port=args.port + number,
+                policy=policy,
+                scorer=args.scorer,
+                teams=build_teams(left, right, args.seats_per_team, args.half_size),
+                width=args.half_size * 2,
+                height=args.half_size,
+                slug=f"{match_id}-r{number}",
+                team_models=team_models,
+            )
+        )
+        results = json.loads((run_dir / "results.json").read_text())
+        rounds.append({"round": number, "dir": run_dir.name, "left": left, "right": right,
+                       "scores": results["final_scores"]})
+
+    # Team A is always slots 0-3 on the left; only the target it draws swaps.
+    totals = [sum(r["scores"][team] for r in rounds) for team in (0, 1)]
+    winner = None if totals[0] == totals[1] else (0 if totals[0] > totals[1] else 1)
+    match = {
+        "match": match_id,
+        "targets": pair,
+        "team_models": team_models,
+        "turns_per_round": args.turns,
+        "rounds": rounds,
+        "totals": totals,
+        "winner": winner,
+        "winner_name": "tie" if winner is None else f"Team {'AB'[winner]}",
+    }
+    path = REPO_ROOT / "runs" / f"{match_id}.json"
+    path.write_text(json.dumps(match, indent=2))
+
+    print("\n=== MATCH RESULT")
+    for entry in rounds:
+        print(f"  round {entry['round']}: Team A ({entry['left']}) {entry['scores'][0]:.3f}"
+              f"  ·  Team B ({entry['right']}) {entry['scores'][1]:.3f}")
+    print(f"  totals: Team A [{team_models[0]}] {totals[0]:.3f}"
+          f"  ·  Team B [{team_models[1]}] {totals[1]:.3f}")
+    print(f"  WINNER: {match['winner_name']}")
+    print(f"  {path}")
+
+
 def versus_main() -> None:
     parser = argparse.ArgumentParser(
         prog="codrawing-versus",
@@ -255,15 +381,7 @@ def versus_main() -> None:
 
     per_team = args.seats_per_team
     half = args.half_size
-    teams = [
-        {
-            "name": f"Team {'AB'[index]}",
-            "target": target,
-            "region": {"x": index * half, "y": 0, "width": half, "height": half},
-            "slots": list(range(index * per_team, (index + 1) * per_team)),
-        }
-        for index, target in enumerate((args.left, args.right))
-    ]
+    teams = build_teams(args.left, args.right, per_team, half)
 
     asyncio.run(
         run(

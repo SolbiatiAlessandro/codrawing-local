@@ -110,7 +110,11 @@ class GameRuntime:
         self.started = False
         self.finished = False
         self.frames: list[dict[str, Any]] = []
-        self.image_model: TargetScorerRouter | None = scorer_from_environment() if TOKENS else None
+        # Both teams' targets go into CLIP's label set, so each half is scored
+        # against the other's target rather than distractors alone.
+        self.image_model: TargetScorerRouter | None = (
+            scorer_from_environment(tuple(team.target for team in TEAMS)) if TOKENS else None
+        )
         self.image_model_feedback: dict[str, Any] | None = None
         self.image_model_score_trace: list[dict[str, Any]] = []
         self.round_scores: list[float] = []

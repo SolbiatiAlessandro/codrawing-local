@@ -1,0 +1,52 @@
+# Builds the coplace-versus image on a native amd64 runner and uploads the
+# coworld to Softmax. Runs remotely because the local build repeatedly filled
+# the laptop's disk (torch under amd64 emulation inside the Colima VM).
+#
+# Needs the SOFTMAX_CREDENTIALS repo secret: the exact content of
+# ~/.softmax/credentials.yaml for an account allowed to upload coworlds.
+
+name: upload-coworld
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp into the manifest (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install coworld CLI
+        run: uv tool install git+https://github.com/Metta-AI/coworld.git
+
+      - name: Write Softmax credentials
+        env:
+          SOFTMAX_CREDENTIALS: ${{ secrets.SOFTMAX_CREDENTIALS }}
+        run: |
+          test -n "$SOFTMAX_CREDENTIALS" || { echo "SOFTMAX_CREDENTIALS secret is empty" >&2; exit 1; }
+          mkdir -p ~/.softmax
+          printf '%s' "$SOFTMAX_CREDENTIALS" > ~/.softmax/credentials.yaml
+          chmod 600 ~/.softmax/credentials.yaml
+
+      - name: Build image and hydrated manifest
+        run: coworld build --version "${{ inputs.version }}"
+
+      - name: Upload coworld (waits for hosted smoke certification)
+        run: coworld upload-coworld dist/coworld_manifest.json
+
+      - name: Keep the hydrated manifest as a run artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coworld-manifest
+          path: dist/coworld_manifest.json
+          if-no-files-found: ignore

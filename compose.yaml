@@ -1,0 +1,6 @@
+services:
+  codrawing-versus:
+    image: coplace-versus:latest
+    platform: linux/amd64
+    build:
+      context: .
