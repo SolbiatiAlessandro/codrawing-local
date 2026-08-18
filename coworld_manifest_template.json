@@ -1,6 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/Metta-AI/coworld/main/src/coworld/coworld_manifest_schema.json",
-  "tags": ["adversarial", "competitive", "turn-based", "pixel-art", "multi-agent"],
+  "tags": [
+    "adversarial",
+    "competitive",
+    "turn-based",
+    "pixel-art",
+    "multi-agent"
+  ],
   "game": {
     "name": "coplace-versus",
     "description": "Adversarial co/place: two teams of four agents share one canvas and are given different drawing targets. Each team's rectangle is cropped and scored on its own every turn by a frozen MobileCLIP2 classifier. Regions are scoring boundaries, not painting restrictions - any seat may paint or erase any pixel, including inside the other team's half - and only the score on the FINAL turn decides the winner, so a lead can be taken away and must be defended.",
@@ -8,7 +14,11 @@
     "runnable": {
       "type": "game",
       "image": "{{CODRAWING_VERSUS_IMAGE}}",
-      "run": ["python", "-m", "codrawing.game.server"]
+      "run": [
+        "python",
+        "-m",
+        "codrawing.game.server"
+      ]
     },
     "replay_viewer": {
       "bundle": "build/static-replay-viewer"
@@ -17,13 +27,23 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "additionalProperties": false,
-      "required": ["tokens", "players", "teams", "width", "height", "max_turns"],
+      "required": [
+        "tokens",
+        "players",
+        "teams",
+        "width",
+        "height",
+        "max_turns"
+      ],
       "properties": {
         "tokens": {
           "type": "array",
           "minItems": 2,
           "maxItems": 16,
-          "items": {"type": "string", "minLength": 1}
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "players": {
           "type": "array",
@@ -32,8 +52,15 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name"],
-            "properties": {"name": {"type": "string", "minLength": 1}}
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           }
         },
         "teams": {
@@ -43,38 +70,100 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "target", "region", "slots"],
+            "required": [
+              "name",
+              "target",
+              "region",
+              "slots"
+            ],
             "properties": {
-              "name": {"type": "string", "minLength": 1},
-              "target": {"type": "string", "minLength": 1},
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              },
               "region": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["x", "y", "width", "height"],
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
                 "properties": {
-                  "x": {"type": "integer", "minimum": 0},
-                  "y": {"type": "integer", "minimum": 0},
-                  "width": {"type": "integer", "minimum": 1},
-                  "height": {"type": "integer", "minimum": 1}
+                  "x": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "y": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
                 }
               },
               "slots": {
                 "type": "array",
                 "minItems": 1,
                 "uniqueItems": true,
-                "items": {"type": "integer", "minimum": 0}
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
               }
             }
           }
         },
-        "width": {"type": "integer", "minimum": 8, "maximum": 96},
-        "height": {"type": "integer", "minimum": 8, "maximum": 96},
-        "max_turns": {"type": "integer", "minimum": 1, "maximum": 200},
-        "turns_per_round": {"type": "integer", "minimum": 1, "maximum": 200},
-        "checkpoint_every_turns": {"type": "integer", "minimum": 1, "maximum": 200},
-        "seed": {"type": "integer"},
-        "player_connect_timeout_seconds": {"type": "number", "minimum": 0, "default": 180},
-        "action_timeout_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 600, "default": 60}
+        "width": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 96
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 96
+        },
+        "max_turns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "turns_per_round": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "checkpoint_every_turns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "player_connect_timeout_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "default": 180
+        },
+        "action_timeout_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 600,
+          "default": 60
+        }
       }
     },
     "results_schema": {
@@ -85,38 +174,100 @@
         "prediction": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["label", "probability"],
+          "required": [
+            "label",
+            "probability"
+          ],
           "properties": {
-            "label": {"type": "string"},
-            "probability": {"type": "number", "minimum": 0, "maximum": 1}
+            "label": {
+              "type": "string"
+            },
+            "probability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
           }
         },
         "feedback": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["model", "turn", "target_score"],
+          "required": [
+            "model",
+            "turn",
+            "target_score"
+          ],
           "properties": {
-            "model": {"type": "string"},
-            "turn": {"type": "integer", "minimum": 0},
-            "target_score": {"type": "number", "minimum": 0, "maximum": 1},
-            "score_delta": {"type": "number", "minimum": -1, "maximum": 1},
-            "pass_threshold": {"type": ["number", "null"]},
-            "passing": {"type": "boolean"},
-            "target_rank": {"type": "integer", "minimum": 1},
-            "label_count": {"type": "integer", "minimum": 2},
-            "best_target_label": {"type": "string"},
-            "top_predictions": {"type": "array", "items": {"$ref": "#/$defs/prediction"}}
+            "model": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "target_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "score_delta": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1
+            },
+            "pass_threshold": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "passing": {
+              "type": "boolean"
+            },
+            "target_rank": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "label_count": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "best_target_label": {
+              "type": "string"
+            },
+            "top_predictions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/prediction"
+              }
+            }
           }
         }
       },
       "required": [
-        "scores", "target", "teams", "turns", "max_turns", "completed_slots",
-        "ended_by_agents", "accepted_pixels", "final_canvas",
-        "winner", "winner_name", "final_scores"
+        "scores",
+        "target",
+        "teams",
+        "turns",
+        "max_turns",
+        "completed_slots",
+        "ended_by_agents",
+        "accepted_pixels",
+        "final_canvas",
+        "winner",
+        "winner_name",
+        "final_scores"
       ],
       "properties": {
-        "scores": {"type": "array", "items": {"type": "number"}},
-        "target": {"type": "string"},
+        "scores": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "target": {
+          "type": "string"
+        },
         "teams": {
           "type": "array",
           "minItems": 2,
@@ -124,40 +275,152 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "target", "region", "slots", "accepted_pixels", "final_score", "best_score"],
+            "required": [
+              "name",
+              "target",
+              "region",
+              "slots",
+              "accepted_pixels",
+              "final_score",
+              "best_score"
+            ],
             "properties": {
-              "name": {"type": "string"},
-              "target": {"type": "string"},
+              "name": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
               "region": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["x", "y", "width", "height"],
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
                 "properties": {
-                  "x": {"type": "integer"}, "y": {"type": "integer"},
-                  "width": {"type": "integer"}, "height": {"type": "integer"}
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "width": {
+                    "type": "integer"
+                  },
+                  "height": {
+                    "type": "integer"
+                  }
                 }
               },
-              "slots": {"type": "array", "items": {"type": "integer", "minimum": 0}},
-              "accepted_pixels": {"type": "integer", "minimum": 0},
-              "final_score": {"type": "number", "minimum": 0, "maximum": 1},
-              "best_score": {"type": "number", "minimum": 0, "maximum": 1},
-              "round_scores": {"type": "array", "items": {"type": "number"}},
-              "score_trace": {"type": "array", "items": {"$ref": "#/$defs/feedback"}},
-              "final_feedback": {"anyOf": [{"$ref": "#/$defs/feedback"}, {"type": "null"}]},
-              "pass_threshold": {"type": ["number", "null"]}
+              "slots": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "accepted_pixels": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "final_score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "best_score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "round_scores": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "score_trace": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/feedback"
+                }
+              },
+              "final_feedback": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/feedback"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pass_threshold": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
             }
           }
         },
-        "turns": {"type": "integer", "minimum": 0},
-        "max_turns": {"type": "integer", "minimum": 1},
-        "completed_slots": {"type": "array", "items": {"type": "integer", "minimum": 0}},
-        "ended_by_agents": {"type": "boolean"},
-        "accepted_pixels": {"type": "array", "items": {"type": "integer", "minimum": 0}},
-        "final_canvas": {"type": "array", "items": {"type": "string", "pattern": "^#[0-9A-F]{6}$"}},
-        "image_model": {"type": ["string", "null"]},
-        "winner": {"type": ["integer", "null"], "minimum": 0},
-        "winner_name": {"type": "string"},
-        "final_scores": {"type": "array", "items": {"type": "number"}}
+        "turns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_turns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "completed_slots": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "ended_by_agents": {
+          "type": "boolean"
+        },
+        "accepted_pixels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "final_canvas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9A-F]{6}$"
+          }
+        },
+        "image_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "winner": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "winner_name": {
+          "type": "string"
+        },
+        "final_scores": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
       }
     },
     "protocols": {
@@ -200,8 +463,12 @@
       "id": "versus-template-baseline",
       "name": "Versus Template Baseline",
       "type": "player",
-      "image": "{{CODRAWING_VERSUS_IMAGE}}",
-      "run": ["python", "-m", "codrawing.player.versus_template_player"],
+      "image": "{{CODRAWING_VERSUS_PLAYER_IMAGE}}",
+      "run": [
+        "python",
+        "-m",
+        "codrawing.player.versus_template_player"
+      ],
       "description": "Deterministic no-LLM baseline. Draws a fixed template of its team's target inside its team's own region, split between teammates by stride so they never contend, and never raids the other half. Establishes what honest play scores."
     }
   ],
@@ -217,14 +484,64 @@
         "player_connect_timeout_seconds": 180,
         "action_timeout_seconds": 60,
         "teams": [
-          {"name": "Team A", "target": "pineapple", "slots": [0, 1, 2, 3],
-           "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
-          {"name": "Team B", "target": "strawberry", "slots": [4, 5, 6, 7],
-           "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+          {
+            "name": "Team A",
+            "target": "pineapple",
+            "slots": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "strawberry",
+            "slots": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "region": {
+              "x": 16,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          }
         ],
         "players": [
-          {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
-          {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "A4"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          },
+          {
+            "name": "B4"
+          }
         ]
       }
     },
@@ -239,14 +556,64 @@
         "player_connect_timeout_seconds": 180,
         "action_timeout_seconds": 60,
         "teams": [
-          {"name": "Team A", "target": "strawberry", "slots": [0, 1, 2, 3],
-           "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
-          {"name": "Team B", "target": "pineapple", "slots": [4, 5, 6, 7],
-           "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+          {
+            "name": "Team A",
+            "target": "strawberry",
+            "slots": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "pineapple",
+            "slots": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "region": {
+              "x": 16,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          }
         ],
         "players": [
-          {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
-          {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "A4"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          },
+          {
+            "name": "B4"
+          }
         ]
       }
     },
@@ -261,14 +628,64 @@
         "player_connect_timeout_seconds": 180,
         "action_timeout_seconds": 60,
         "teams": [
-          {"name": "Team A", "target": "butterfly", "slots": [0, 1, 2, 3],
-           "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
-          {"name": "Team B", "target": "zebra", "slots": [4, 5, 6, 7],
-           "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+          {
+            "name": "Team A",
+            "target": "butterfly",
+            "slots": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "zebra",
+            "slots": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "region": {
+              "x": 16,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          }
         ],
         "players": [
-          {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
-          {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "A4"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          },
+          {
+            "name": "B4"
+          }
         ]
       }
     }
@@ -282,25 +699,91 @@
       "player_connect_timeout_seconds": 180,
       "action_timeout_seconds": 60,
       "teams": [
-        {"name": "Team A", "target": "pineapple", "slots": [0, 1, 2, 3],
-         "region": {"x": 0, "y": 0, "width": 16, "height": 24}},
-        {"name": "Team B", "target": "strawberry", "slots": [4, 5, 6, 7],
-         "region": {"x": 16, "y": 0, "width": 16, "height": 24}}
+        {
+          "name": "Team A",
+          "target": "pineapple",
+          "slots": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "region": {
+            "x": 0,
+            "y": 0,
+            "width": 16,
+            "height": 24
+          }
+        },
+        {
+          "name": "Team B",
+          "target": "strawberry",
+          "slots": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "region": {
+            "x": 16,
+            "y": 0,
+            "width": 16,
+            "height": 24
+          }
+        }
       ],
       "players": [
-        {"name": "A1"}, {"name": "A2"}, {"name": "A3"}, {"name": "A4"},
-        {"name": "B1"}, {"name": "B2"}, {"name": "B3"}, {"name": "B4"}
+        {
+          "name": "A1"
+        },
+        {
+          "name": "A2"
+        },
+        {
+          "name": "A3"
+        },
+        {
+          "name": "A4"
+        },
+        {
+          "name": "B1"
+        },
+        {
+          "name": "B2"
+        },
+        {
+          "name": "B3"
+        },
+        {
+          "name": "B4"
+        }
       ]
     },
     "players": [
-      {"player_id": "versus-template-baseline"},
-      {"player_id": "versus-template-baseline"},
-      {"player_id": "versus-template-baseline"},
-      {"player_id": "versus-template-baseline"},
-      {"player_id": "versus-template-baseline"},
-      {"player_id": "versus-template-baseline"},
-      {"player_id": "versus-template-baseline"},
-      {"player_id": "versus-template-baseline"}
+      {
+        "player_id": "versus-template-baseline"
+      },
+      {
+        "player_id": "versus-template-baseline"
+      },
+      {
+        "player_id": "versus-template-baseline"
+      },
+      {
+        "player_id": "versus-template-baseline"
+      },
+      {
+        "player_id": "versus-template-baseline"
+      },
+      {
+        "player_id": "versus-template-baseline"
+      },
+      {
+        "player_id": "versus-template-baseline"
+      },
+      {
+        "player_id": "versus-template-baseline"
+      }
     ]
   }
 }

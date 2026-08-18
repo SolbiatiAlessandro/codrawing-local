@@ -18,7 +18,7 @@ ENV HF_HOME=/weights
 RUN python -c "import open_clip; open_clip.create_model_and_transforms('MobileCLIP2-S0', pretrained='dfndr2b'); open_clip.get_tokenizer('MobileCLIP2-S0')"
 
 
-FROM docker.io/library/python:3.12-slim
+FROM docker.io/library/python:3.12-slim AS game
 
 # One RUN for install + cleanup: files deleted in a later layer would still
 # occupy the image, and the platform caps images at 5120 MiB. The deleted
@@ -53,3 +53,19 @@ WORKDIR /app
 COPY codrawing /app/codrawing
 
 CMD ["python", "-m", "codrawing.game.server"]
+
+
+# The baseline template player: no scoring, no torch — it connects a
+# websocket and paints a fixed template, so it ships as its own tiny image
+# (player-role images are capped at 512 MiB, far below the game image).
+FROM docker.io/library/python:3.12-slim AS player
+
+RUN pip install --no-cache-dir websockets==15.0.1
+
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+COPY codrawing /app/codrawing
+
+CMD ["python", "-m", "codrawing.player.versus_template_player"]
