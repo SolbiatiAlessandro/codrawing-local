@@ -34,7 +34,7 @@ RUN pip install --no-cache-dir \
       open-clip-torch==3.3.0 \
       pillow==11.3.0 \
  && SP=/usr/local/lib/python3.12/site-packages \
- && rm -rf "$SP"/torch/include "$SP"/torch/test "$SP"/torch/bin \
+ && rm -rf "$SP"/torch/include "$SP"/torch/test \
       "$SP"/torch/share "$SP"/torch/utils/benchmark \
       "$SP"/torchgen/packaged \
  && find /usr/local/lib/python3.12 -depth -name __pycache__ -type d -exec rm -rf {} + \
