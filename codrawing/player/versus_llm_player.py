@@ -114,6 +114,30 @@ def fallback_pixel(observation: dict[str, Any], slot: int) -> dict[str, Any]:
     return {"x": x + region["x"], "y": y + region["y"], "color": color}
 
 
+def render_canvas(observation: dict[str, Any]) -> tuple[str, str]:
+    """The board as a labelled character grid.
+
+    A coordinate list forces the model to rebuild the picture in its head every
+    turn, and it grows with every pixel painted. A grid shows the shape, and at
+    a full canvas it costs about half as many tokens.
+    """
+    width, height = int(observation["width"]), int(observation["height"])
+    canvas = observation["canvas"]
+    palette = sorted({value for value in canvas if value != "#FFFFFF"})
+    symbols = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    key = {value: symbols[index % len(symbols)] for index, value in enumerate(palette)}
+
+    rows = ["    " + "".join(str(x % 10) for x in range(width))]
+    for y in range(height):
+        rows.append(f"{y:3d} " + "".join(key.get(canvas[y * width + x], ".") for x in range(width)))
+    legend = (
+        "colour key: " + ", ".join(f"{symbol}={value}" for value, symbol in key.items())
+        if key
+        else "colour key: (nothing painted yet)"
+    )
+    return "\n".join(rows), legend
+
+
 def build_prompt(observation: dict[str, Any], slot: int) -> str:
     width, height = observation["width"], observation["height"]
     team = team_of(observation, slot)
@@ -123,11 +147,7 @@ def build_prompt(observation: dict[str, Any], slot: int) -> str:
     mates = sorted(team["slots"])
     color = SEAT_COLORS[slot % len(SEAT_COLORS)]
 
-    painted = [
-        f"{position % width},{position // width}:{value}"
-        for position, value in enumerate(observation["canvas"])
-        if value != "#FFFFFF"
-    ]
+    canvas_art, palette_legend = render_canvas(observation)
     board = "\n".join(
         f"T{item['turn']} {item['player']}: {item['text']}"
         for item in observation.get("recent_messages") or []
@@ -170,13 +190,19 @@ the FINAL turn decides the winner, so a lead can be taken away and must be defen
 
 Canvas: {width}x{height}; x grows right, y grows down; x=0..{width - 1}, y=0..{height - 1}.
 Turn {observation['turn']} of {observation['max_turns']}.
-Your paint color is {color}. Use exactly that color, or #FFFFFF to erase a pixel.
+Pick whatever colour the drawing needs at that pixel, as #RRGGBB - a gold body
+and a green crown read as a pineapple; four seats each painting one fixed colour
+never will. Use #FFFFFF to erase. Agree on the palette with your team and stick
+to it. (Your default colour if you cannot decide is {color}.)
 Your teammates are seats {mates}. All seats act SIMULTANEOUSLY. If two seats paint the same
 pixel on the same turn, BOTH writes are dropped, so claim your next coordinate on the board
 and route around what your teammates claimed.
 
-Painted pixels as x,y:#RRGGBB (everything else is white):
-{'; '.join(painted) if painted else '(blank canvas)'}
+The canvas, one character per pixel ('.' is unpainted). Column numbers run
+across the top, row numbers down the left, so the character at column x and
+row y IS pixel (x, y):
+{canvas_art}
+{palette_legend}
 
 Your team's board (only your team can read this):
 {board}
@@ -205,8 +231,51 @@ def _post_json(url: str, body: dict[str, Any], headers: dict[str, str], timeout:
         return cast(dict[str, Any], json.loads(response.read()))
 
 
-def call_model(prompt: str, timeout: float) -> dict[str, Any]:
-    """One InvokeModel call, through the sidecar when the platform provides it."""
+OPENAI_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": PAINT_TOOL["name"],
+            "description": PAINT_TOOL["description"],
+            "parameters": PAINT_TOOL["input_schema"],
+        },
+    }
+]
+
+
+def call_model(prompt: str, timeout: float) -> tuple[str, dict[str, Any]]:
+    """One model call. Returns (wire format, response payload).
+
+    Routing is chosen by which credential the pod was given, cheapest-intent
+    first: OpenRouter when a key is present, else the hosted Bedrock sidecar,
+    else a direct Anthropic key for local runs.
+    """
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        base = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+        model = os.environ.get("OPENROUTER_MODEL")
+        if not model:
+            raise RuntimeError("OPENROUTER_API_KEY is set but OPENROUTER_MODEL is not")
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {openrouter_key}",
+            "X-Title": "coplace-versus",
+        }
+        payload = _post_json(
+            f"{base}/chat/completions",
+            {
+                "model": model,
+                "max_tokens": 640,
+                "temperature": 0.7,
+                "messages": [{"role": "user", "content": prompt}],
+                "tools": OPENAI_TOOLS,
+                "tool_choice": {"type": "function", "function": {"name": "paint_pixel"}},
+            },
+            headers,
+            timeout,
+        )
+        return "openai", payload
+
     endpoint = os.environ.get("AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
     body: dict[str, Any] = {
         "max_tokens": 640,
@@ -223,21 +292,42 @@ def call_model(prompt: str, timeout: float) -> dict[str, Any]:
         body["anthropic_version"] = "bedrock-2023-05-31"
         url = f"{endpoint.rstrip('/')}/model/{model}/invoke"
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        return _post_json(url, body, headers, timeout)
+        return "anthropic", _post_json(url, body, headers, timeout)
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise RuntimeError("no AWS_ENDPOINT_URL_BEDROCK_RUNTIME and no ANTHROPIC_API_KEY")
+        raise RuntimeError("no OPENROUTER_API_KEY, no Bedrock endpoint, and no ANTHROPIC_API_KEY")
     body["model"] = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
     headers = {
         "Content-Type": "application/json",
         "x-api-key": api_key,
         "anthropic-version": "2023-06-01",
     }
-    return _post_json("https://api.anthropic.com/v1/messages", body, headers, timeout)
+    return "anthropic", _post_json("https://api.anthropic.com/v1/messages", body, headers, timeout)
 
 
-def extract_decision(payload: dict[str, Any]) -> dict[str, Any]:
+def extract_decision(wire: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if wire == "openai":
+        choices = payload.get("choices") or []
+        if not choices:
+            raise ValueError(f"no choices in response: {json.dumps(payload)[:300]}")
+        message = choices[0].get("message") or {}
+        for call in message.get("tool_calls") or []:
+            function = call.get("function") or {}
+            if function.get("name") == "paint_pixel":
+                arguments = function.get("arguments")
+                value = json.loads(arguments) if isinstance(arguments, str) else arguments
+                if isinstance(value, dict):
+                    return cast(dict[str, Any], value)
+        text = message.get("content") or ""
+        match = re.search(r"\{", text)
+        if match is None:
+            raise ValueError("model returned no paint_pixel tool call")
+        value, _ = json.JSONDecoder().raw_decode(text[match.start() :])
+        if not isinstance(value, dict):
+            raise ValueError("model returned a non-object decision")
+        return cast(dict[str, Any], value)
+
     for block in payload.get("content", []):
         if block.get("type") == "tool_use" and block.get("name") == "paint_pixel":
             value = block.get("input")
@@ -276,8 +366,8 @@ def decide(observation: dict[str, Any], slot: int, attempts: int, timeout: float
     last_error: str | None = None
     for attempt in range(attempts):
         try:
-            payload = call_model(prompt, timeout)
-            decision = extract_decision(payload)
+            wire, payload = call_model(prompt, timeout)
+            decision = extract_decision(wire, payload)
             message = str(decision.get("message") or "")[:240]
             return {"paint": sanitize(decision, observation, slot), "message": message}
         except HTTPError as error:
@@ -306,12 +396,15 @@ async def main() -> None:
     url = ws_url()
     attempts = int(os.environ.get("MODEL_MAX_ATTEMPTS", "3"))
     timeout = float(os.environ.get("MODEL_TIMEOUT_SECONDS", "35"))
-    endpoint = os.environ.get("AWS_ENDPOINT_URL_BEDROCK_RUNTIME")
-    print(
-        f"[player] bedrock_endpoint={'set' if endpoint else 'MISSING'} "
-        f"model={os.environ.get('BEDROCK_MODEL', '(unset)')}",
-        flush=True,
-    )
+    if os.environ.get("OPENROUTER_API_KEY"):
+        route = f"openrouter model={os.environ.get('OPENROUTER_MODEL', '(unset)')}"
+    elif os.environ.get("AWS_ENDPOINT_URL_BEDROCK_RUNTIME"):
+        route = f"bedrock-sidecar model={os.environ.get('BEDROCK_MODEL', '(unset)')}"
+    elif os.environ.get("ANTHROPIC_API_KEY"):
+        route = "anthropic-direct"
+    else:
+        route = "NONE (every turn will fall back to the template)"
+    print(f"[player] llm route: {route}", flush=True)
 
     async with websockets.connect(url, max_size=None) as websocket:
         slot: int | None = None

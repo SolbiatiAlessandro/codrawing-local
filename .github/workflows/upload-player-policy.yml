@@ -24,15 +24,16 @@ on:
         description: "Player module to run"
         required: true
         default: "codrawing.player.versus_llm_player"
-      use_bedrock:
-        description: "Give the policy hosted Bedrock access"
-        type: boolean
+      routing:
+        description: "Where the seat's model calls go"
+        type: choice
         required: true
-        default: true
-      bedrock_model:
-        description: "Model id written into BEDROCK_MODEL"
+        default: openrouter
+        options: [openrouter, bedrock, none]
+      model:
+        description: "Model id: an OpenRouter slug, or a Bedrock model id"
         required: true
-        default: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        default: "mistralai/mistral-nemo"
 
 jobs:
   upload:
@@ -60,11 +61,24 @@ jobs:
         run: docker build --target player -t coplace-versus-player:ci .
 
       - name: Upload the policy
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           args=(coplace-versus-player:ci
                 --name "${{ inputs.name }}"
                 --run python --run -m --run "${{ inputs.module }}")
-          if [ "${{ inputs.use_bedrock }}" = "true" ]; then
-            args+=(--use-bedrock --bedrock-model "${{ inputs.bedrock_model }}")
-          fi
+          case "${{ inputs.routing }}" in
+            openrouter)
+              test -n "$OPENROUTER_API_KEY" || {
+                echo "routing=openrouter needs the OPENROUTER_API_KEY repo secret" >&2; exit 1; }
+              # --secret-env is the only env injection upload-policy offers,
+              # so the model slug rides along with the key. The platform keeps
+              # both in AWS Secrets Manager and injects them into the pod.
+              args+=(--secret-env "OPENROUTER_API_KEY=$OPENROUTER_API_KEY"
+                     --secret-env "OPENROUTER_MODEL=${{ inputs.model }}")
+              ;;
+            bedrock)
+              args+=(--use-bedrock --bedrock-model "${{ inputs.model }}")
+              ;;
+          esac
           coworld upload-policy "${args[@]}"
