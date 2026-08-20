@@ -407,9 +407,12 @@ async def _play_game() -> None:
         runtime.frames.append(snapshot)
         await _broadcast_globals(snapshot)
         # Checkpoint: a long episode that is killed part-way still leaves a
-        # readable replay and results for everything it played.
+        # readable replay of everything it played. The results artifact is NOT
+        # written here. The hosted runner treats results.json as the episode's
+        # final output, so a checkpoint that wrote it ended every hosted episode
+        # at the first checkpoint turn.
         if engine.turn % CHECKPOINT_EVERY == 0 and not engine.done:
-            await asyncio.to_thread(_save_artifacts, _build_artifacts(engine))
+            await asyncio.to_thread(_save_artifacts, _build_artifacts(engine), False)
 
     _save_artifacts(_build_artifacts(engine))
     runtime.finished = True
@@ -442,14 +445,18 @@ def _build_artifacts(engine: PixelArtEngine) -> tuple[dict[str, Any], dict[str, 
     return results, replay
 
 
-def _save_artifacts(artifacts: tuple[dict[str, Any], dict[str, Any]]) -> None:
+def _save_artifacts(
+    artifacts: tuple[dict[str, Any], dict[str, Any]],
+    write_results: bool = True,
+) -> None:
     results, replay = artifacts
-    write_data(
-        RESULTS_URI,
-        json.dumps(results),
-        content_type="application/json",
-        http_method=artifact_method("COGAME_RESULTS_METHOD"),
-    )
+    if write_results:
+        write_data(
+            RESULTS_URI,
+            json.dumps(results),
+            content_type="application/json",
+            http_method=artifact_method("COGAME_RESULTS_METHOD"),
+        )
     write_data(
         REPLAY_SAVE_URI,
         json.dumps(replay),
