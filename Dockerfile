@@ -69,3 +69,35 @@ WORKDIR /app
 COPY codrawing /app/codrawing
 
 CMD ["python", "-m", "codrawing.player.versus_template_player"]
+
+
+# The real harness: each seat is a persistent Claude Agent SDK session driving
+# the game through MCP tools. The SDK spawns the claude CLI, and the CLI talks
+# to whatever ANTHROPIC_BASE_URL points at - so the same code that runs locally
+# on a subscription runs hosted against OpenRouter, and AGENT_MODEL picks the
+# model. Node comes from the slim node image rather than apt, to stay well
+# under the 512 MiB player-image cap.
+FROM docker.io/library/node:22-slim AS agent
+
+RUN npm install -g @anthropic-ai/claude-code \
+ && npm cache clean --force
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-pip \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip3 install --break-system-packages --no-cache-dir \
+      websockets==15.0.1 "claude-agent-sdk>=0.2" \
+ && find /usr/lib/python3* -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    HOME=/tmp \
+    CLAUDE_CONFIG_DIR=/tmp/claude \
+    AGENT_WORKSPACE=/tmp/agent-workspace \
+    DISABLE_TELEMETRY=1 \
+    DISABLE_AUTOUPDATER=1
+
+WORKDIR /app
+COPY codrawing /app/codrawing
+
+CMD ["python3", "-m", "codrawing.player.agent_player"]

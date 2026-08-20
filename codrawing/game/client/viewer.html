@@ -6,57 +6,48 @@
   <title>co/place</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
   <style>
-    /* The "paper arcade" match view (design canvas: Codrawing Arena Directions,
-       P1 · Band). A light paper ground with a dot grid, pixel type for the
-       scoreboard, the two team threads as white cards on either side of the
-       board, and a score-by-turn chart under it. Deliberately single-theme:
-       every colour is painted explicitly so the page holds on any host. */
+    /* The "stream" match view (design canvas: Codrawing Arena Directions,
+       S1 · Stream). The paper arcade sits inside a dark video player: title,
+       HP bars, the board as big as the player allows, and a row of player
+       cams showing the model behind each seat. Under the player a score
+       panel with the scorer's reads; on the right the two team chats. Light
+       SF chrome around a Press Start arcade; every colour painted
+       explicitly so the page holds on any host. */
     :root {
-      --ink: #1F1B14;
-      --paper: #FBF8F1;
-      --rule: #D8D1C2;
-      --muted: #8A7E6B;
-      --amb: #E08A12;
-      --teal: #1B7FAE;
-      --red: #E11D48;
-      --green: #2C9A55;
-      --teamA: #F5A524;
-      --teamB: #38BDF8;
-      --board: #F7F4EC;
+      --ink: #1F1B14; --paper: #FBF8F1; --rule: #D8D1C2; --muted: #8A7E6B;
+      --amb: #E08A12; --teal: #1B7FAE; --red: #E11D48; --green: #2C9A55;
+      --video: #0E0E10; --video-line: #3A3A40; --chrome-muted: #C9C9CF;
+      --line: #E5E5EA; --grey: #53535F;
       --p8: 'Press Start 2P', ui-monospace, Menlo, monospace;
       --sf: -apple-system, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      --rail: 322px;
+      --chat-w: 340px;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body {
-      margin: 0; color: var(--ink); background: var(--paper);
-      background-image: radial-gradient(#E6DFD0 1px, transparent 1px); background-size: 14px 14px;
-      font-family: var(--sf); overflow: hidden; -webkit-font-smoothing: antialiased;
-    }
-    main { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    body { margin: 0; background: #FFFFFF; color: var(--ink); font-family: var(--sf); overflow: hidden; -webkit-font-smoothing: antialiased; }
     a { color: var(--amb); }
+    main { height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) var(--chat-w); overflow: hidden; }
+    .left { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #FFFFFF; }
 
-    /* ---------- band ---------- */
-    .band {
-      padding: 18px 40px 16px; border-bottom: 2px solid var(--ink);
-      display: flex; flex-direction: column; align-items: center; gap: 12px; flex: none;
+    /* ---------- player ---------- */
+    .player { flex: 1; min-height: 0; position: relative; background: var(--video); overflow: hidden; }
+    .arcade {
+      position: absolute; left: 0; right: 0; top: 0; bottom: 46px;
+      background: var(--paper); background-image: radial-gradient(#E6DFD0 1px, transparent 1px); background-size: 14px 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 14px; overflow: hidden;
     }
-    .title { font-family: var(--p8); font-size: 15px; color: var(--amb); text-align: center; line-height: 1.6; }
-    .bars { display: grid; grid-template-columns: 1fr 160px 1fr; gap: 28px; align-items: center; width: 100%; }
-    .bars.solo { grid-template-columns: 1fr 160px; }
+    .title { font-family: var(--p8); font-size: 15px; color: var(--amb); text-align: center; line-height: 1.6; flex: none; padding: 0 120px; }
+    .row { width: min(1254px, calc(100% - 80px)); flex: none; }
+    .bars { display: grid; grid-template-columns: 1fr 140px 1fr; gap: 28px; align-items: center; }
+    .bars.solo { grid-template-columns: 1fr 140px; }
     .hp { min-width: 0; }
     .hp .line { display: flex; align-items: baseline; gap: 10px; padding-bottom: 8px; }
     .hp.b .line { flex-direction: row-reverse; }
     .hp .lbl { font-family: var(--p8); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .hp.a .lbl { color: var(--amb); }
-    .hp.b .lbl { color: var(--teal); }
+    .hp.a .lbl { color: var(--amb); } .hp.b .lbl { color: var(--teal); }
     .hp .num { font-family: var(--p8); font-size: 14px; color: var(--ink); margin-left: auto; white-space: nowrap; }
     .hp.b .num { margin-left: 0; margin-right: auto; }
-    .hp .meter {
-      height: 22px; background: #FFFFFF; border: 3px solid var(--ink); padding: 3px;
-      display: flex; flex-direction: row-reverse; position: relative;
-    }
+    .hp .meter { height: 22px; background: #FFFFFF; border: 3px solid var(--ink); padding: 3px; display: flex; flex-direction: row-reverse; position: relative; }
     .hp.b .meter { flex-direction: row; }
     .hp .ghost { position: absolute; top: 3px; bottom: 3px; right: 3px; background: #F3D3A6; }
     .hp.b .ghost { right: auto; left: 3px; }
@@ -65,201 +56,176 @@
     .hp.b .fill { background: linear-gradient(180deg, #5CC8F0, #1B7FAE); }
     .hp .note { font-family: var(--p8); font-size: 7px; padding-top: 6px; color: var(--muted); white-space: nowrap; }
     .hp.b .note { text-align: right; }
-    .note.down { color: var(--red); }
-    .note.up { color: var(--green); }
+    .note.down { color: var(--red); } .note.up { color: var(--green); }
     .round { display: flex; flex-direction: column; align-items: center; gap: 6px; }
     .round .n { font-family: var(--p8); font-size: 26px; color: var(--red); }
     .round .cap { font-family: var(--p8); font-size: 7px; color: var(--red); white-space: nowrap; }
-    .round .status { font-family: var(--p8); font-size: 6px; color: var(--muted); padding-top: 2px; letter-spacing: .08em; }
-    .round .status.live { color: var(--green); }
 
-    /* ---------- arena ---------- */
-    .arena {
-      flex: 1; min-height: 0; display: grid;
-      grid-template-columns: var(--rail) minmax(0, 1fr) var(--rail);
-    }
-    .arena.solo { grid-template-columns: var(--rail) minmax(0, 1fr); }
-    .arena.solo .card.right { display: none; }
-
-    /* group-chat cards */
-    .card {
-      display: flex; flex-direction: column; min-height: 0; background: #FFFFFF;
-      border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--rule);
-    }
-    .card.left { margin: 22px 0 22px 22px; }
-    .card.right { margin: 22px 22px 22px 0; }
-    .card .head {
-      display: flex; flex-direction: column; align-items: center; gap: 4px;
-      padding: 14px 12px 10px; border-bottom: 2px solid var(--ink); background: #FFFFFF;
-    }
-    .card .faces { display: flex; }
-    .face {
-      width: 34px; height: 34px; border-radius: 4px; background: #FFFFFF; border: 2px solid var(--ink);
-      display: flex; align-items: center; justify-content: center; flex: none;
-    }
-    .faces .face { margin-left: -8px; }
-    .faces .face:first-child { margin-left: 0; }
-    .face svg { display: block; }
-    .card .name { font-family: var(--p8); font-size: 9px; color: var(--ink); padding-top: 4px; text-align: center; line-height: 1.6; }
-    .card .sub { font-family: var(--sf); font-size: 11px; color: var(--muted); }
-    .thread { flex: 1; overflow-y: auto; padding: 6px 12px 12px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; }
-    .divider { text-align: center; font-family: var(--p8); font-size: 7px; color: var(--muted); padding: 10px 0 4px; }
-    .msg { display: flex; gap: 8px; align-items: flex-end; }
-    .card.right .msg { flex-direction: row-reverse; }
-    .msg .face { width: 30px; height: 30px; }
-    .msg .body { max-width: 82%; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-    .card.right .msg .body { align-items: flex-end; }
-    .msg .who { font-family: var(--sf); font-size: 10px; color: var(--muted); padding: 0 6px; display: flex; gap: 6px; align-items: center; }
-    .msg .who b { font-weight: 600; }
-    .tag { font-family: var(--p8); font-size: 6px; color: var(--paper); padding: 2px 5px; }
-    .tag.raid { background: var(--red); }
-    .tag.repair { background: var(--green); }
-    .tag.paint { background: var(--teal); }
-    .tag.plan { background: var(--muted); }
-    .tag.collided { background: var(--ink); }
-    .msg .bubble {
-      font-family: var(--sf); font-size: 12.5px; line-height: 1.35; color: var(--ink);
-      background: var(--paper); border: 2px solid var(--ink); border-radius: 4px; box-shadow: 3px 3px 0 var(--rule);
-      padding: 7px 11px; white-space: pre-line; text-wrap: pretty; overflow-wrap: anywhere;
-    }
-    .sys { text-align: center; font-family: var(--p8); font-size: 6px; line-height: 1.9; color: var(--muted); padding: 2px 8px; }
-    .sys.raid { color: var(--red); }
-    .sys.collide { color: var(--ink); }
-    .card .foot { padding: 8px 12px 12px; border-top: 2px solid var(--ink); }
-    .card .foot div {
-      height: 32px; border: 2px solid var(--rule); border-radius: 4px; font-family: var(--sf); font-size: 12px;
-      color: var(--muted); display: flex; align-items: center; padding: 0 12px;
-    }
-
-    /* centre column */
-    .centre { display: flex; flex-direction: column; min-height: 0; position: relative; overflow: hidden; }
-    .quote { padding: 22px 26px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; flex: none; }
-    .quote .q { font-family: var(--p8); font-size: 9px; line-height: 2.1; color: var(--ink); text-align: center; max-width: 900px; }
-    .quote .src { display: flex; align-items: center; gap: 14px; font-family: var(--p8); font-size: 7px; color: var(--muted); letter-spacing: .1em; }
-    .quote .src i { width: 40px; height: 2px; background: var(--rule); display: block; }
-    .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 18px 26px 0; min-height: 0; }
+    .stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 40px; }
     .frame { position: relative; }
     .plate { position: relative; border: 5px solid var(--ink); padding: 10px; background: #FFFFFF; box-shadow: 0 18px 50px rgba(31,27,20,.18); }
     #board { display: block; image-rendering: pixelated; }
     #fx { position: absolute; left: 10px; top: 10px; pointer-events: none; }
+    .stamp { position: absolute; font-family: var(--p8); font-size: 18px; text-shadow: 2px 2px 0 var(--paper); white-space: nowrap; pointer-events: none; }
+    .stamp.raid { left: 28px; top: 20px; color: var(--red); transform: rotate(-6deg); }
+    .stamp.win { left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 26px; background: rgba(251,248,241,.92); border: 4px solid var(--ink); padding: 14px 22px; box-shadow: 6px 6px 0 var(--rule); text-shadow: none; }
+    .stamp.coord { right: 16px; bottom: 16px; font-size: 7px; color: var(--muted); background: rgba(255,255,255,.85); padding: 4px 6px; text-shadow: none; }
+
+    /* player cams */
+    .cams { display: flex; justify-content: space-between; gap: 8px; }
+    .cams.solo { justify-content: center; }
+    .camgroup { display: flex; gap: 8px; height: 78px; }
+    .cam { width: 112px; flex: none; background: #FFFFFF; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--rule); display: flex; flex-direction: column; overflow: hidden; }
+    .cam .face { flex: 1; min-height: 0; background: var(--paper); display: flex; align-items: center; justify-content: center; }
+    .cam .face svg { display: block; flex: none; }
+    .cam .tag { border-top: 2px solid var(--ink); padding: 5px 7px; display: flex; align-items: center; gap: 5px; font-family: var(--p8); font-size: 6px; color: var(--ink); white-space: nowrap; }
+    .cam .tag i { width: 7px; height: 7px; border: 1px solid var(--ink); flex: none; display: block; }
+    .cam .tag span { margin-left: auto; color: var(--muted); }
+    .cam.acted .face { background: #FFFFFF; }
+    .cam.collided .tag { background: #FBE3E8; }
+
+    /* overlays + chrome */
+    .turnchip { position: absolute; right: 16px; top: 14px; display: flex; align-items: center; gap: 6px; background: rgba(14,14,16,.78); color: #FFFFFF; border-radius: 4px; padding: 5px 9px; font-family: var(--sf); font-size: 13px; font-weight: 700; }
+    .chrome { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: var(--video); display: flex; align-items: center; gap: 14px; padding: 0 14px; }
+    .chrome button { background: transparent; border: 0; padding: 0; cursor: pointer; color: #FFFFFF; display: flex; align-items: center; }
+    .chrome button svg { display: block; }
+    .chrome .tlabel { font-family: var(--sf); font-size: 13px; font-weight: 600; color: #FFFFFF; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .chrome .badge { font-family: var(--sf); font-size: 11px; font-weight: 600; color: var(--chrome-muted); letter-spacing: .04em; border: 1px solid var(--video-line); border-radius: 3px; padding: 2px 6px; white-space: nowrap; }
+    .chrome .badge.live { color: #FFFFFF; border-color: var(--red); background: var(--red); }
+    .chrome #download { font-family: var(--sf); font-size: 11px; font-weight: 600; color: var(--chrome-muted); border: 1px solid var(--video-line); border-radius: 3px; padding: 2px 6px; }
+    .chrome input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 5px; border-radius: 3px; background: var(--video-line); outline: none; margin: 0; cursor: pointer; }
+    .chrome input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 0 0 2px var(--amb); }
+    .chrome input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #FFFFFF; border: 0; box-shadow: 0 0 0 2px var(--amb); }
+
+    /* ---------- score panel ---------- */
+    .scorepanel { margin: 12px 20px; border: 1px solid var(--line); border-radius: 6px; background: #FFFFFF; padding: 14px 20px 12px; display: flex; flex-direction: column; gap: 8px; flex: none; }
+    .sp-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .sp-title { font-family: var(--sf); font-size: 16px; font-weight: 700; color: var(--ink); }
+    .sp-legend { font-family: var(--p8); font-size: 7px; color: var(--muted); }
+    .sp-legend .a { color: var(--amb); } .sp-legend .b { color: var(--teal); }
+    .sp-grid { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 28px; align-items: center; }
+    .sp-grid.solo { grid-template-columns: auto minmax(0, 1fr); }
+    .scorer { display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
+    .scorer.right { align-items: flex-end; text-align: right; }
+    .scorer .k { font-family: var(--p8); font-size: 7px; color: var(--muted); }
+    .scorer .v { font-family: var(--p8); font-size: 12px; }
+    .scorer.a .v { color: var(--amb); } .scorer.b .v { color: var(--teal); }
+    .scorer .rest { font-family: var(--p8); font-size: 7px; color: var(--muted); line-height: 1.8; }
+    .chartcol { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    #spark { display: block; width: 100%; height: 72px; }
+    .chartcol .ft { display: flex; justify-content: space-between; font-family: var(--p8); font-size: 7px; color: var(--muted); }
+    .chartcol .ft .mark { color: var(--red); }
+
+    /* ---------- chats ---------- */
+    .chats { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: #FFFFFF; }
+    .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .chat + .chat { border-top: 1px solid var(--line); }
+    main.solo .chat.right { display: none; }
+    .chat-head { height: 44px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+    .pbadge { width: 20px; height: 20px; color: #FFFFFF; font-family: var(--p8); font-size: 6px; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; flex: none; }
+    .pbadge.a { background: var(--amb); } .pbadge.b { background: var(--teal); }
+    .chat-title { font-family: var(--sf); font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat-count { margin-left: auto; font-family: var(--sf); font-size: 12px; font-weight: 600; color: var(--grey); white-space: nowrap; }
+    .lines { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 4px 8px; scrollbar-width: thin; }
+    .divider { display: flex; align-items: center; gap: 10px; padding: 8px 10px 4px; font-family: var(--sf); font-size: 11px; font-weight: 700; color: var(--grey); letter-spacing: .06em; }
+    .divider i { flex: 1; height: 1px; background: var(--line); display: block; }
+    .ln { padding: 4px 10px; font-family: var(--sf); font-size: 13px; line-height: 1.45; color: var(--ink); border-radius: 4px; overflow-wrap: anywhere; }
+    .ln .mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; vertical-align: -4px; margin-right: 4px; }
+    .ln .mark svg { display: block; }
+    .ln .pbadge { width: 18px; height: 18px; vertical-align: -4px; margin-right: 4px; }
+    .ln .who { font-weight: 700; }
+    .ln .tag { font-size: 9px; font-weight: 800; letter-spacing: .08em; margin-left: 6px; }
+    .tag.raid { color: var(--red); } .tag.repair { color: var(--green); } .tag.paint { color: var(--teal); } .tag.plan { color: var(--grey); } .tag.collided { color: var(--ink); }
+    .ln .txt { white-space: pre-line; }
+    .sys { padding: 2px 10px; font-family: var(--sf); font-size: 11px; color: var(--grey); font-style: italic; }
+    .sys.raid { color: var(--red); }
 
     /* ---------- motion ---------- */
     @keyframes slam { 0% { transform: rotate(-6deg) scale(2.2); opacity: 0; } 60% { transform: rotate(-6deg) scale(.92); opacity: 1; } 100% { transform: rotate(-6deg) scale(1); } }
-    @keyframes slamwin { 0% { transform: translateX(-50%) scale(2.4); opacity: 0; } 60% { transform: translateX(-50%) scale(.94); opacity: 1; } 100% { transform: translateX(-50%) scale(1); } }
+    @keyframes slamwin { 0% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; } 60% { transform: translate(-50%, -50%) scale(.94); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); } }
     @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
-    @keyframes pop { 0% { transform: translateY(10px) scale(.96); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
     @keyframes flashred { 0% { background: #FBE3E8; } 100% { background: #FFFFFF; } }
     .stamp.raid.slam { animation: slam .45s cubic-bezier(.2,.9,.3,1.3) both; }
     .stamp.win.slam { animation: slamwin .6s cubic-bezier(.2,.9,.3,1.3) both; }
     .hp .num.chip { display: inline-block; animation: shake .4s ease both; color: var(--red); }
     .hp .meter.chip { animation: flashred .6s ease both; }
-    .msg.fresh, .sys.fresh { animation: pop .35s ease both; }
-    .msg.fresh:nth-child(2) { animation-delay: .08s; } .msg.fresh:nth-child(3) { animation-delay: .16s; } .msg.fresh:nth-child(4) { animation-delay: .24s; }
-    @media (prefers-reduced-motion: reduce) { .stamp, .hp .num, .hp .meter, .msg, .sys { animation: none !important; } }
-    .stamp {
-      position: absolute; font-family: var(--p8); font-size: 18px; text-shadow: 2px 2px 0 var(--paper);
-      white-space: nowrap; pointer-events: none;
-    }
-    .stamp.raid { left: 28px; top: 20px; color: var(--red); transform: rotate(-6deg); }
-    .stamp.win { left: 50%; bottom: -34px; transform: translateX(-50%); font-size: 18px; }
-    .stamp.coord { right: 16px; bottom: 16px; font-size: 7px; color: var(--muted); background: rgba(255,255,255,.85); padding: 4px 6px; text-shadow: none; }
-    .bottom { padding: 22px 26px 16px; display: flex; flex-direction: column; gap: 10px; flex: none; }
-    .chartbox { border: 3px solid var(--rule); background: #FFFFFF; padding: 10px 14px 8px; }
-    .chartbox .hd, .chartbox .ft { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--p8); font-size: 7px; color: var(--muted); }
-    .chartbox .hd { padding-bottom: 6px; }
-    .chartbox .ft { padding-top: 6px; }
-    .chartbox .hd .a { color: var(--amb); }
-    .chartbox .hd .b { color: var(--teal); }
-    .chartbox .ft .mark { color: var(--red); }
-    #spark { display: block; width: 100%; height: 96px; }
-    .controls { display: flex; align-items: center; gap: 12px; }
-    .controls button {
-      font-family: var(--p8); font-size: 8px; color: var(--paper); background: var(--ink); border: 0;
-      padding: 7px 10px; cursor: pointer; white-space: nowrap;
-    }
-    .controls button:hover { background: #3A3328; }
-    .controls button#download { background: transparent; color: var(--muted); border: 2px solid var(--rule); padding: 5px 8px; }
-    .controls input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; background: var(--rule); outline: none; margin: 0; }
-    .controls input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 6px; height: 18px; background: var(--ink); cursor: pointer; }
-    .controls input[type=range]::-moz-range-thumb { width: 6px; height: 18px; background: var(--ink); border: 0; border-radius: 0; cursor: pointer; }
-    .framelabel { font-family: var(--p8); font-size: 8px; color: var(--muted); white-space: nowrap; }
+    @media (prefers-reduced-motion: reduce) { .stamp, .hp .num, .hp .meter { animation: none !important; } }
 
-    @media (max-width: 1400px) { :root { --rail: 270px; } .msg .bubble { font-size: 11.5px; } .quote { display: none; } }
-    @media (max-width: 1100px) { .arena { grid-template-columns: minmax(0, 1fr); } .card { display: none; } .bars { grid-template-columns: 1fr 120px 1fr; gap: 14px; } }
+    @media (max-width: 1500px) { :root { --chat-w: 300px; } .cam { width: 92px; } .camgroup { height: 68px; } .cam .face svg { width: 26px; height: 26px; } .title { font-size: 12px; } }
+    @media (max-width: 1150px) { main { grid-template-columns: minmax(0, 1fr); } .chats { display: none; } .cams { display: none; } .scorer { min-width: 0; } .scorer .rest { display: none; } }
   </style>
 </head>
 <body>
-<main>
-  <header class="band">
-    <div class="title" id="title">&nbsp;</div>
-    <div class="bars" id="bars">
-      <div class="hp a" id="hp-a">
-        <div class="line"><span class="lbl" id="lbl-a">1P</span><span class="num" id="num-a">&mdash;</span></div>
-        <div class="meter"><div class="ghost" id="ghost-a" style="width:0"></div><div class="fill" id="fill-a" style="width:0"></div></div>
-        <div class="note" id="note-a">&nbsp;</div>
+<main id="main">
+  <div class="left">
+    <div class="player" id="player">
+      <div class="arcade">
+        <div class="title" id="title">&nbsp;</div>
+        <div class="row bars" id="bars">
+          <div class="hp a" id="hp-a">
+            <div class="line"><span class="lbl" id="lbl-a">1P</span><span class="num" id="num-a">&mdash;</span></div>
+            <div class="meter"><div class="ghost" id="ghost-a" style="width:0"></div><div class="fill" id="fill-a" style="width:0"></div></div>
+            <div class="note" id="note-a">&nbsp;</div>
+          </div>
+          <div class="round"><div class="n" id="turn">0</div><div class="cap" id="round-cap">ROUND 0 / 0</div></div>
+          <div class="hp b" id="hp-b">
+            <div class="line"><span class="lbl" id="lbl-b">2P</span><span class="num" id="num-b">&mdash;</span></div>
+            <div class="meter"><div class="ghost" id="ghost-b" style="width:0"></div><div class="fill" id="fill-b" style="width:0"></div></div>
+            <div class="note" id="note-b">&nbsp;</div>
+          </div>
+        </div>
+        <div class="stage" id="stage">
+          <div class="frame">
+            <div class="plate"><canvas id="board"></canvas><canvas id="fx"></canvas></div>
+            <div class="stamp raid" id="stamp-raid" hidden></div>
+            <div class="stamp win" id="stamp-win" hidden></div>
+            <div class="stamp coord" id="stamp-coord" hidden></div>
+          </div>
+        </div>
+        <div class="row cams" id="cams"><div class="camgroup" id="cams-left"></div><div class="camgroup" id="cams-right"></div></div>
       </div>
-      <div class="round">
-        <div class="n" id="turn">0</div>
-        <div class="cap" id="round-cap">ROUND 0 / 0</div>
-        <div class="status" id="status">CONNECTING</div>
-      </div>
-      <div class="hp b" id="hp-b">
-        <div class="line"><span class="lbl" id="lbl-b">2P</span><span class="num" id="num-b">&mdash;</span></div>
-        <div class="meter"><div class="ghost" id="ghost-b" style="width:0"></div><div class="fill" id="fill-b" style="width:0"></div></div>
-        <div class="note" id="note-b">&nbsp;</div>
+      <div class="turnchip" id="turnchip">TURN 0 / 0</div>
+      <div class="chrome">
+        <button id="play" title="Play / pause"><svg viewBox="0 0 24 24" width="20" height="20" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path id="play-icon" d="M7 4l13 8-13 8z"/></svg></button>
+        <input type="range" id="timeline" min="0" max="0" value="0">
+        <span class="tlabel" id="framelabel">&nbsp;</span>
+        <span class="badge" id="status">CONNECTING</span>
+        <button id="download">PNG</button>
+        <button id="fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
       </div>
     </div>
-  </header>
-
-  <div class="arena" id="arena">
-    <aside class="card left" id="rail-left">
-      <div class="head"><div class="faces" id="faces-left"></div><div class="name" id="name-left">&nbsp;</div><div class="sub" id="sub-left">&nbsp;</div></div>
-      <div class="thread" id="thread-left"></div>
-      <div class="foot"><div>Agents only &middot; spectating</div></div>
-    </aside>
-
-    <section class="centre">
-      <div class="quote">
-        <div class="q">There is an empty canvas.<br>You may place a pixel upon it, but you must wait to place another.<br>Individually you can create something. Together you can create something more.</div>
-        <div class="src"><i></i><span>R/PLACE &middot; 2017</span><i></i></div>
+    <div class="scorepanel">
+      <div class="sp-head"><span class="sp-title">Score by turn</span><span class="sp-legend" id="charthint"></span></div>
+      <div class="sp-grid" id="sp-grid">
+        <div class="scorer a" id="scorer-a"></div>
+        <div class="chartcol"><canvas id="spark"></canvas><div class="ft"><span>T1</span><span class="mark" id="chartmark"></span><span id="chartend"></span></div></div>
+        <div class="scorer b right" id="scorer-b"></div>
       </div>
-      <div class="stage" id="stage">
-        <div class="frame">
-          <div class="plate"><canvas id="board"></canvas><canvas id="fx"></canvas></div>
-          <div class="stamp raid" id="stamp-raid" hidden></div>
-          <div class="stamp win" id="stamp-win" hidden></div>
-          <div class="stamp coord" id="stamp-coord" hidden></div>
-        </div>
-      </div>
-      <div class="bottom">
-        <div class="chartbox">
-          <div class="hd"><span>SCORE BY TURN</span><span id="charthint"></span></div>
-          <canvas id="spark"></canvas>
-          <div class="ft"><span>T1</span><span class="mark" id="chartmark"></span><span id="chartend"></span></div>
-        </div>
-        <div class="controls">
-          <button id="play">&#9646;&#9646; PAUSE</button>
-          <input type="range" id="timeline" min="0" max="0" value="0">
-          <span class="framelabel" id="framelabel"></span>
-          <button id="download">PNG</button>
-        </div>
-      </div>
-    </section>
-
-    <aside class="card right" id="rail-right">
-      <div class="head"><div class="faces" id="faces-right"></div><div class="name" id="name-right">&nbsp;</div><div class="sub" id="sub-right">&nbsp;</div></div>
-      <div class="thread" id="thread-right"></div>
-      <div class="foot"><div>Agents only &middot; spectating</div></div>
-    </aside>
+    </div>
   </div>
+  <aside class="chats">
+    <section class="chat left" id="chat-left">
+      <div class="chat-head"><span class="pbadge a">1P</span><span class="chat-title" id="name-left">&nbsp;</span><span class="chat-count" id="sub-left"></span></div>
+      <div class="lines" id="thread-left"></div>
+    </section>
+    <section class="chat right" id="chat-right">
+      <div class="chat-head"><span class="pbadge b">2P</span><span class="chat-title" id="name-right">&nbsp;</span><span class="chat-count" id="sub-right"></span></div>
+      <div class="lines" id="thread-right"></div>
+    </section>
+  </aside>
 </main>
 <script>
   const SEAT_COLORS = ['#FB7185', '#60A5FA', '#4ADE80', '#FBBF24', '#C084FC',
                        '#F472B6', '#2DD4BF', '#A3E635', '#818CF8', '#FB923C'];
-  const TEAM_COLORS = ['#F5A524', '#38BDF8'];
+  // The same seats, deep enough to read as text on white.
+  const SEAT_INK = ['#E11D48', '#2563EB', '#16A34A', '#D97706', '#7C3AED',
+                    '#DB2777', '#0D9488', '#65A30D', '#4F46E5', '#EA580C'];
+  const TEAM_COLORS = ['#E08A12', '#1B7FAE'];
   const WHITE = '#FFFFFF';
-  // 16x16 gnome sprites, one per seat (hat in the seat colour).
+  // 16x16 gnome sprites, one per seat: the face of a seat whose model is unknown.
   const GNOMES = ["<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#FDB1BC\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#FB7185\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#A34E5E\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>","<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#A8CEFC\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#60A5FA\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#436EA6\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>","<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#9BEDB9\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#4ADE80\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#35915B\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>","<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#FDDC87\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#FBBF24\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#A37E22\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>","<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#DCBBFD\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#C084FC\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#7F59A8\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>","<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#F9B1D7\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#F472B6\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#9F4E7C\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>","<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#8CE7DC\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#2DD4BF\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#248B82\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>","<path fill=\"#12131A\" d=\"M7.0 1.0h1.0v1.0h-1.0zM8.0 1.0h1.0v1.0h-1.0zM6.0 2.0h1.0v1.0h-1.0zM9.0 2.0h1.0v1.0h-1.0zM6.0 3.0h1.0v1.0h-1.0zM9.0 3.0h1.0v1.0h-1.0zM5.0 4.0h1.0v1.0h-1.0zM10.0 4.0h1.0v1.0h-1.0zM5.0 5.0h1.0v1.0h-1.0zM10.0 5.0h1.0v1.0h-1.0zM4.0 6.0h1.0v1.0h-1.0zM11.0 6.0h1.0v1.0h-1.0zM4.0 7.0h1.0v1.0h-1.0zM11.0 7.0h1.0v1.0h-1.0zM3.0 8.0h1.0v1.0h-1.0zM4.0 8.0h1.0v1.0h-1.0zM5.0 8.0h1.0v1.0h-1.0zM6.0 8.0h1.0v1.0h-1.0zM7.0 8.0h1.0v1.0h-1.0zM8.0 8.0h1.0v1.0h-1.0zM9.0 8.0h1.0v1.0h-1.0zM10.0 8.0h1.0v1.0h-1.0zM11.0 8.0h1.0v1.0h-1.0zM12.0 8.0h1.0v1.0h-1.0zM3.0 9.0h1.0v1.0h-1.0zM6.0 9.0h1.0v1.0h-1.0zM9.0 9.0h1.0v1.0h-1.0zM12.0 9.0h1.0v1.0h-1.0zM3.0 10.0h1.0v1.0h-1.0zM12.0 10.0h1.0v1.0h-1.0zM3.0 11.0h1.0v1.0h-1.0zM12.0 11.0h1.0v1.0h-1.0zM4.0 12.0h1.0v1.0h-1.0zM11.0 12.0h1.0v1.0h-1.0zM4.0 13.0h1.0v1.0h-1.0zM11.0 13.0h1.0v1.0h-1.0zM5.0 14.0h1.0v1.0h-1.0zM10.0 14.0h1.0v1.0h-1.0zM6.0 15.0h1.0v1.0h-1.0zM7.0 15.0h1.0v1.0h-1.0zM8.0 15.0h1.0v1.0h-1.0zM9.0 15.0h1.0v1.0h-1.0z\"/><path fill=\"#CCF190\" d=\"M7.0 2.0h1.0v1.0h-1.0zM6.0 4.0h1.0v1.0h-1.0zM5.0 6.0h1.0v1.0h-1.0z\"/><path fill=\"#A3E635\" d=\"M8.0 2.0h1.0v1.0h-1.0zM7.0 3.0h1.0v1.0h-1.0zM8.0 3.0h1.0v1.0h-1.0zM7.0 4.0h1.0v1.0h-1.0zM8.0 4.0h1.0v1.0h-1.0zM9.0 4.0h1.0v1.0h-1.0zM6.0 5.0h1.0v1.0h-1.0zM7.0 5.0h1.0v1.0h-1.0zM8.0 5.0h1.0v1.0h-1.0zM6.0 6.0h1.0v1.0h-1.0zM7.0 6.0h1.0v1.0h-1.0zM8.0 6.0h1.0v1.0h-1.0zM9.0 6.0h1.0v1.0h-1.0zM5.0 7.0h1.0v1.0h-1.0zM6.0 7.0h1.0v1.0h-1.0zM7.0 7.0h1.0v1.0h-1.0zM8.0 7.0h1.0v1.0h-1.0zM9.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#6D962C\" d=\"M9.0 5.0h1.0v1.0h-1.0zM10.0 6.0h1.0v1.0h-1.0zM10.0 7.0h1.0v1.0h-1.0z\"/><path fill=\"#F2C9A0\" d=\"M4.0 9.0h1.0v1.0h-1.0zM5.0 9.0h1.0v1.0h-1.0zM7.0 9.0h1.0v1.0h-1.0zM8.0 9.0h1.0v1.0h-1.0zM10.0 9.0h1.0v1.0h-1.0zM11.0 9.0h1.0v1.0h-1.0zM5.0 10.0h1.0v1.0h-1.0zM6.0 10.0h1.0v1.0h-1.0zM7.0 10.0h1.0v1.0h-1.0zM8.0 10.0h1.0v1.0h-1.0zM9.0 10.0h1.0v1.0h-1.0zM10.0 10.0h1.0v1.0h-1.0zM7.0 11.0h1.0v1.0h-1.0zM8.0 11.0h1.0v1.0h-1.0z\"/><path fill=\"#F4F1E8\" d=\"M4.0 10.0h1.0v1.0h-1.0zM11.0 10.0h1.0v1.0h-1.0zM4.0 11.0h1.0v1.0h-1.0zM5.0 11.0h1.0v1.0h-1.0zM6.0 11.0h1.0v1.0h-1.0zM9.0 11.0h1.0v1.0h-1.0zM10.0 11.0h1.0v1.0h-1.0zM11.0 11.0h1.0v1.0h-1.0zM5.0 12.0h1.0v1.0h-1.0zM6.0 12.0h1.0v1.0h-1.0zM7.0 12.0h1.0v1.0h-1.0zM8.0 12.0h1.0v1.0h-1.0zM9.0 12.0h1.0v1.0h-1.0zM10.0 12.0h1.0v1.0h-1.0zM5.0 13.0h1.0v1.0h-1.0zM6.0 13.0h1.0v1.0h-1.0zM7.0 13.0h1.0v1.0h-1.0zM8.0 13.0h1.0v1.0h-1.0zM9.0 13.0h1.0v1.0h-1.0zM10.0 13.0h1.0v1.0h-1.0zM6.0 14.0h1.0v1.0h-1.0zM7.0 14.0h1.0v1.0h-1.0zM8.0 14.0h1.0v1.0h-1.0zM9.0 14.0h1.0v1.0h-1.0z\"/>"];
+  // Model marks (inner SVG on a 24x24 viewBox) keyed by family.
+  const MARKS = {"claude":{"fill":"#D97757","inner":"<path d=\"m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z\"/>"},"codex":{"fill":"#1F1B14","inner":"<path d=\"M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z\"/>"},"kimi":{"fill":"#1F1B14","inner":"<path d=\"M21.765.351C22.998.351 24 1.353 24 2.586S22.998 4.82 21.765 4.82h-1.974c-.15 0-.26-.12-.26-.26V2.586A2.237 2.237 0 0 1 21.765.35M9.41 13.388l8.447-8.377c.16-.16.07-.471-.14-.471h-4.55s-.1.02-.14.06l-9.099 9.029c-.14.14-.35.02-.35-.21V4.81c0-.15-.1-.27-.221-.27H.22c-.12 0-.22.12-.22.27v18.57c0 .15.1.27.22.27h3.137c.12 0 .22-.12.22-.27v-3.79c0-.08.03-.16.08-.21l2.826-2.796c.07-.07.16-.08.241-.03l7.546 5.551a8.9 8.9 0 0 0 4.018 1.493c.12.01.23-.11.23-.27V19.76c0-.14-.08-.25-.19-.26a5.8 5.8 0 0 1-2.355-.942l-6.533-4.73c-.14-.09-.15-.32-.03-.441\"/>"}};
   const board = document.querySelector('#board');
   const boardCtx = board.getContext('2d');
   const fx = document.querySelector('#fx');
@@ -273,15 +239,39 @@
   let liveScores = [];
   let liveFrames = [];
   let seatLayout = null;
+  let teamModels = null;   // from the replay config or the live snapshot, when known
 
   function esc(value) {
     const node = document.createElement('div'); node.textContent = value; return node.innerHTML;
   }
   function sprite(slot, px) {
-    const paths = GNOMES[slot % GNOMES.length];
-    return '<svg viewBox="0 0 16 16" width="' + px + '" height="' + px + '" shape-rendering="crispEdges">' + paths + '</svg>';
+    return '<svg viewBox="0 0 16 16" width="' + px + '" height="' + px + '" shape-rendering="crispEdges">' + GNOMES[slot % GNOMES.length] + '</svg>';
   }
   function pct(value, digits) { return (100 * (value || 0)).toFixed(digits === undefined ? 1 : digits); }
+  function modelFamily(id) {
+    const s = String(id || '').toLowerCase();
+    if (!s) return null;
+    if (s.includes('claude') || s.includes('anthropic')) return 'claude';
+    if (s.includes('kimi') || s.includes('moonshot')) return 'kimi';
+    if (s.includes('gpt') || s.includes('codex') || s.includes('openai') || /^o[1-9]/.test(s)) return 'codex';
+    if (s.includes('gemini')) return 'gemini';
+    return s.split(/[-_/:]/)[0];
+  }
+  function modelOf(frame, slot) {
+    if (teamModels && (frame.teams || []).length) {
+      const k = teamOfSlot(frame, slot);
+      if (k >= 0 && teamModels[k]) return teamModels[k];
+    }
+    return null;
+  }
+  function markSvg(family, px) {
+    const m = family && MARKS[family];
+    if (!m) return null;
+    return '<svg viewBox="0 0 24 24" width="' + px + '" height="' + px + '" fill="' + m.fill + '">' + m.inner + '</svg>';
+  }
+  function faceOf(frame, slot, px) {
+    return markSvg(modelFamily(modelOf(frame, slot)), px) || sprite(slot, Math.round(px * 0.85));
+  }
 
   /* ---------- geometry helpers ---------- */
   function regionAt(frame, x) {
@@ -322,7 +312,7 @@
     return tags;
   }
 
-  /* ---------- seats and threads ---------- */
+  /* ---------- seats, cams, chats ---------- */
   function layoutSeats(frame) {
     const teams = frame.teams || [];
     const count = (frame.player_names || []).length || 5;
@@ -330,34 +320,53 @@
       ? { versus: true, left: teams[0].slots.slice(), right: teams[1].slots.slice() }
       : { versus: false, left: Array.from({ length: count }, (_, i) => i), right: [] };
     const same = seatLayout && seatLayout.versus === next.versus &&
-      String(seatLayout.left) === String(next.left) && String(seatLayout.right) === String(next.right);
+      String(seatLayout.left) === String(next.left) && String(seatLayout.right) === String(next.right) &&
+      seatLayout.models === String(teamModels);
     if (same) return;
     seatLayout = next;
-    document.querySelector('#arena').classList.toggle('solo', !next.versus);
+    seatLayout.models = String(teamModels);
+    document.querySelector('#main').classList.toggle('solo', !next.versus);
     document.querySelector('#bars').classList.toggle('solo', !next.versus);
+    document.querySelector('#cams').classList.toggle('solo', !next.versus);
+    document.querySelector('#sp-grid').classList.toggle('solo', !next.versus);
     document.querySelector('#hp-b').hidden = !next.versus;
+    document.querySelector('#scorer-b').hidden = !next.versus;
     [['left', next.left], ['right', next.right]].forEach(([side, slots]) => {
-      document.querySelector('#faces-' + side).innerHTML =
-        slots.map(s => '<div class="face">' + sprite(s, 24) + '</div>').join('');
-      document.querySelector('#sub-' + side).textContent = slots.length + ' agent' + (slots.length === 1 ? '' : 's') + ' · group thread';
+      document.querySelector('#cams-' + side).innerHTML = slots.map(s => {
+        const model = modelOf(frame, s);
+        return '<div class="cam" id="cam-' + s + '"><div class="face">' + faceOf(frame, s, 34) + '</div>' +
+          '<div class="tag"><i style="background:' + SEAT_COLORS[s % SEAT_COLORS.length] + '"></i>agent' + s +
+          '<span>' + esc(model ? modelFamily(model) : '') + '</span></div></div>';
+      }).join('');
+      document.querySelector('#sub-' + side).textContent = slots.length + ' agent' + (slots.length === 1 ? '' : 's');
     });
     if (next.versus) {
       teams.forEach((team, k) => {
-        document.querySelector('#name-' + (k ? 'right' : 'left')).textContent = team.name + ' · ' + team.target;
+        document.querySelector('#name-' + (k ? 'right' : 'left')).textContent = team.name.toUpperCase() + ' CHAT';
       });
     } else {
-      document.querySelector('#name-left').textContent = 'Agents · ' + frame.target;
+      document.querySelector('#name-left').textContent = 'AGENTS CHAT';
+    }
+  }
+  function renderCams(frame) {
+    const acted = new Set(frame.accepted_slots || []);
+    const collided = new Set(frame.collision_slots || []);
+    for (const slot of [...seatLayout.left, ...seatLayout.right]) {
+      const cam = document.querySelector('#cam-' + slot);
+      if (!cam) continue;
+      cam.classList.toggle('acted', acted.has(slot));
+      cam.classList.toggle('collided', collided.has(slot));
     }
   }
 
   const liveThreads = { left: [], right: [] };
-  function threadHtml(frame, previous, slots, fresh) {
+  function threadHtml(frame, previous, slots) {
     const tags = seatTags(frame, previous);
     const teams = frame.teams || [];
     const mine = new Set(slots);
+    const team = teams.findIndex(t => t.slots.some(s => mine.has(s)));
     const parts = [];
     const messages = (frame.messages || []).filter(m => mine.has(m.slot));
-    // System lines first: what the board did to this team this turn.
     const events = [];
     for (const i of writesOf(frame, previous)) {
       const owner = frame.owners ? frame.owners[i] : -1;
@@ -365,25 +374,25 @@
       const region = regionAt(frame, i % frame.width);
       if (!slots.length || !teams[region] || !teams[region].slots.some(s => mine.has(s))) continue;
       const at = '(' + (i % frame.width) + ', ' + Math.floor(i / frame.width) + ')';
-      events.push('<div class="sys raid' + (fresh ? ' fresh' : '') + '">RAID · AGENT ' + owner + ' ' + (frame.canvas[i] === WHITE ? 'ERASED' : 'PAINTED OVER') + ' ' + at + '</div>');
+      events.push('<div class="sys raid">✕ agent' + owner + ' ' + (frame.canvas[i] === WHITE ? 'erased' : 'painted over') + ' ' + at + '</div>');
     }
     const collided = (frame.collision_slots || []).filter(s => mine.has(s));
-    if (collided.length) events.push('<div class="sys collide' + (fresh ? ' fresh' : '') + '">COLLISION · AGENT ' + collided.join(' + AGENT ') + ' · WRITE DROPPED</div>');
+    if (collided.length) events.push('<div class="sys">collision — agent' + collided.join(' + agent') + ' wrote the same square, writes dropped</div>');
     if (!messages.length && !events.length) return '';
-    parts.push('<div class="divider">TURN ' + frame.turn + (frame.turn === frame.max_turns ? ' · FINAL' : '') + '</div>');
+    parts.push('<div class="divider"><i></i>TURN ' + frame.turn + (frame.turn === frame.max_turns ? ' · FINAL' : '') + '<i></i></div>');
     for (const m of messages) {
       const tag = tags[m.slot] || 'plan';
+      const badge = team >= 0 ? '<span class="pbadge ' + (team ? 'b' : 'a') + '">' + (team ? '2P' : '1P') + '</span>' : '';
       parts.push(
-        '<div class="msg' + (fresh ? ' fresh' : '') + '">' +
-        '<div class="face">' + sprite(m.slot, 22) + '</div>' +
-        '<div class="body"><div class="who"><b style="color:' + SEAT_COLORS[m.slot % SEAT_COLORS.length] + '">Agent ' + m.slot + '</b>' +
-        '<span class="tag ' + tag + '">' + tag.toUpperCase() + '</span></div>' +
-        '<div class="bubble">' + esc(m.text) + '</div></div></div>');
+        '<div class="ln"><span class="mark">' + faceOf(frame, m.slot, 14) + '</span>' + badge +
+        '<span class="who" style="color:' + SEAT_INK[m.slot % SEAT_INK.length] + '">agent' + m.slot + '</span>' +
+        '<span class="tag ' + tag + '">' + tag.toUpperCase() + '</span><span>: </span>' +
+        '<span class="txt">' + esc(m.text) + '</span></div>');
     }
     parts.push(...events);
     return parts.join('');
   }
-  function renderThreads(frame, index, animate) {
+  function renderThreads(frame, index) {
     [['left', seatLayout.left], ['right', seatLayout.right]].forEach(([side, slots]) => {
       const el = document.querySelector('#thread-' + side);
       if (!el || !slots.length) return;
@@ -391,7 +400,7 @@
       if (frames.length) {
         const upto = index === undefined ? frames.length - 1 : index;
         const chunks = [];
-        for (let f = 0; f <= upto && f < frames.length; f++) chunks.push(threadHtml(frames[f], f > 0 ? frames[f - 1] : null, slots, animate && f === upto));
+        for (let f = 0; f <= upto && f < frames.length; f++) chunks.push(threadHtml(frames[f], f > 0 ? frames[f - 1] : null, slots));
         html = chunks.join('');
       } else {
         html = liveThreads[side].join('');
@@ -402,32 +411,34 @@
     });
   }
 
-  /* ---------- band ---------- */
+  /* ---------- band, turn chip ---------- */
+  function titleFor(frame) {
+    const teams = frame.teams || [];
+    if (!teams.length) return 'CAN THEY DRAW A ' + String(frame.target || '').toUpperCase() + '?';
+    return teams[0].target === teams[1].target
+      ? 'WHICH TEAM CAN DRAW THE BEST ' + teams[0].target.toUpperCase() + '?'
+      : teams[0].target.toUpperCase() + ' VS ' + teams[1].target.toUpperCase();
+  }
   function renderBand(frame, previous, animate) {
     const teams = frame.teams || [];
     document.querySelector('#turn').textContent = frame.turn;
     const last = frame.turn >= frame.max_turns;
     document.querySelector('#round-cap').textContent = last ? 'FINAL ROUND' : 'ROUND ' + frame.turn + ' / ' + frame.max_turns;
-    const title = document.querySelector('#title');
+    document.querySelector('#turnchip').textContent = 'TURN ' + frame.turn + ' / ' + frame.max_turns;
+    document.querySelector('#title').textContent = titleFor(frame);
     if (!teams.length) {
       const fb = frame.image_model_feedback || {};
       const prev = previous && previous.image_model_feedback ? previous.image_model_feedback.target_score : null;
-      title.textContent = 'CAN THEY DRAW A ' + String(frame.target || '').toUpperCase() + '?';
       setBar('a', 'AGENTS · ' + String(frame.target || '').toUpperCase(), fb.target_score || 0, prev, fb.score_delta || 0, fb.pass_threshold, animate);
       return;
     }
-    const sameTarget = teams[0].target === teams[1].target;
-    title.textContent = sameTarget
-      ? 'WHO CAN DRAW THE BEST ' + teams[0].target.toUpperCase() + '?'
-      : teams[0].target.toUpperCase() + ' VS ' + teams[1].target.toUpperCase();
     const feedback = frame.team_feedback || [];
     const prevFeedback = previous ? (previous.team_feedback || []) : [];
     teams.forEach((team, k) => {
       const f = feedback[k] || {};
       const p = prevFeedback[k];
-      const side = k ? 'b' : 'a';
       const label = k ? team.name.toUpperCase() + ' · 2P' : '1P · ' + team.name.toUpperCase();
-      setBar(side, label, f.target_score || 0, p ? p.target_score : null, f.score_delta || 0, null, animate);
+      setBar(k ? 'b' : 'a', label, f.target_score || 0, p ? p.target_score : null, f.score_delta || 0, null, animate);
     });
   }
   function setBar(side, label, score, previousScore, delta, threshold, animate) {
@@ -453,6 +464,28 @@
     }
   }
 
+  /* ---------- the scorer's reads ---------- */
+  function renderScorer(frame) {
+    const teams = frame.teams || [];
+    const one = (el, target, fb) => {
+      if (!el || el.hidden) return;
+      if (!fb) { el.innerHTML = ''; return; }
+      const others = (fb.top_predictions || [])
+        .filter(p => p.label !== target && p.label !== (fb.best_target_label || target))
+        .sort((a, b) => (b.probability || 0) - (a.probability || 0)).slice(0, 2)
+        .map(p => esc(p.label) + ' ' + pct(p.probability)).join(' · ');
+      el.innerHTML = '<div class="k">THE SCORER SEES…</div>' +
+        '<div class="v">' + esc(String(target).toUpperCase()) + ' ' + pct(fb.target_score) + '</div>' +
+        '<div class="rest">' + (others || '&nbsp;') + '</div>';
+    };
+    if (teams.length === 2) {
+      one(document.querySelector('#scorer-a'), teams[0].target, (frame.team_feedback || [])[0]);
+      one(document.querySelector('#scorer-b'), teams[1].target, (frame.team_feedback || [])[1]);
+    } else {
+      one(document.querySelector('#scorer-a'), frame.target, frame.image_model_feedback);
+    }
+  }
+
   /* ---------- effects: a smoke bomb for an erased square, sparks for a
      square painted over, a seat-coloured ring for fresh paint ---------- */
   let particles = [];
@@ -474,11 +507,9 @@
   }
   function smokeBomb(x, y) {
     const now = performance.now();
-    // the bang: one dark square that snaps out
     particles.push({ kind: 'square', born: now, life: 180, x: x + 0.5, y: y + 0.5, vx: 0, vy: 0, s0: 1.8, grow: 1.6, color: '#1F1B14', alpha: 0.6 });
     particles.push({ kind: 'square', born: now + 40, life: 220, x: x + 0.5, y: y + 0.5, vx: 0, vy: 0, s0: 1.2, grow: 2.2, color: '#FFFFFF', alpha: 0.9 });
     particles.push({ kind: 'ring', born: now, life: 380, x: x + 0.5, y: y + 0.5, s0: 1, grow: 2.6, color: '#E11D48', alpha: 0.9, width: 0.16 });
-    // the smoke: grey squares that billow up, grow, and thin out
     puff(x, y, { count: 22, stagger: 160, life: [750, 1300], drift: 1.1, rise: [-3.2, -1.0], size: [0.55, 1.15], grow: 1.3,
                  colors: ['#8F8A80', '#A8A39A', '#C2BDB4', '#DAD5CC', '#6E6962'], alpha: 0.85 });
     puff(x, y, { count: 6, life: [300, 520], drift: 2.2, rise: [-1.6, 0.4], size: [0.18, 0.3], grow: -0.2,
@@ -528,7 +559,6 @@
         fxCtx.strokeRect(Math.round(px - size / 2) + 0.5, Math.round(py - size / 2) + 0.5, Math.round(size), Math.round(size));
       } else {
         fxCtx.fillStyle = p.color;
-        // snap to a quarter-cell grid so the smoke stays pixel-shaped
         const q = Math.max(1, cell / 4);
         const sx = Math.round((px - size / 2) / q) * q, sy = Math.round((py - size / 2) / q) * q;
         fxCtx.fillRect(sx, sy, Math.round(size / q) * q || q, Math.round(size / q) * q || q);
@@ -546,7 +576,7 @@
   /* ---------- board ---------- */
   function drawBoard(frame, previous) {
     const stage = document.querySelector('#stage');
-    const avail = { w: stage.clientWidth - 52 - 30, h: stage.clientHeight - 18 - 30 };
+    const avail = { w: stage.clientWidth - 80 - 30, h: stage.clientHeight - 30 };
     const cell = Math.max(4, Math.floor(Math.min(avail.w / frame.width, avail.h / frame.height)));
     const size = { w: frame.width * cell + 1, h: frame.height * cell + 1 };
     const scale = window.devicePixelRatio || 1;
@@ -563,7 +593,7 @@
     if (teams.length === 2) {
       teams.forEach((team, k) => {
         boardCtx.fillStyle = TEAM_COLORS[k];
-        boardCtx.globalAlpha = 0.07;
+        boardCtx.globalAlpha = 0.09;
         boardCtx.fillRect(team.region.x * cell, team.region.y * cell, team.region.width * cell, team.region.height * cell);
         boardCtx.globalAlpha = 1;
       });
@@ -665,7 +695,7 @@
     }
   }
 
-  /* ---------- score chart ---------- */
+  /* ---------- score chart + video timeline ---------- */
   function raidTurns(list) {
     const out = [];
     for (let f = 1; f < list.length; f++) {
@@ -680,7 +710,7 @@
   }
   function drawSpark(series, currentIndex, colors, raids, total) {
     const scale = window.devicePixelRatio || 1;
-    const w = spark.clientWidth || 400, h = Math.max(40, spark.clientHeight || 96);
+    const w = spark.clientWidth || 400, h = Math.max(40, spark.clientHeight || 72);
     spark.width = w * scale; spark.height = h * scale;
     const ctx = spark.getContext('2d');
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -691,7 +721,6 @@
     const max = Math.max(0.05, ...series.flat());
     const x = i => pad.l + (i / (length - 1)) * plotW;
     const y = v => pad.t + plotH - (v / max) * plotH;
-    // Turns in which someone wrote in the other half, washed red.
     ctx.fillStyle = 'rgba(225,29,72,0.12)';
     (raids || []).forEach(f => ctx.fillRect(x(f - 1), pad.t, Math.max(1, x(f) - x(f - 1)), plotH));
     ctx.strokeStyle = '#D8D1C2'; ctx.lineWidth = 2;
@@ -702,8 +731,7 @@
     ctx.setLineDash([]);
     series.forEach((scores, k) => {
       if (!scores.length) return;
-      const color = (colors && colors[k]) || '#E08A12';
-      ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+      ctx.strokeStyle = (colors && colors[k]) || '#E08A12'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
       ctx.beginPath();
       scores.forEach((v, i) => (i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v))));
       ctx.stroke();
@@ -718,6 +746,15 @@
       ctx.beginPath(); ctx.arc(x(i), y(scores[i]), 4, 0, 2 * Math.PI); ctx.fill();
     });
   }
+  // The scrubber paints like a video timeline: played part amber, the turns
+  // with a raid in red, the rest of the match dark.
+  function paintTimeline(played, raids, total) {
+    const n = Math.max(total, 2);
+    const at = f => (100 * f / (n - 1)).toFixed(2) + '%';
+    const base = 'linear-gradient(90deg, #E08A12 0%, #E08A12 ' + at(played) + ', #3A3A40 ' + at(played) + ', #3A3A40 100%)';
+    const reds = (raids || []).map(f => 'linear-gradient(90deg, transparent ' + at(f - 1) + ', #E11D48 ' + at(f - 1) + ', #E11D48 ' + at(f) + ', transparent ' + at(f) + ')');
+    timeline.style.background = [...reds, base].join(', ');
+  }
 
   /* ---------- frame ---------- */
   function showFrame(frame, previous, series, scoreIndex, list, animate) {
@@ -726,16 +763,20 @@
     const changed = drawBoard(frame, previous);
     if (animate) spawnEffects(frame, previous, changed);
     renderStamps(frame, changed, animate);
-    renderThreads(frame, scoreIndex, animate);
+    renderCams(frame);
+    renderThreads(frame, scoreIndex);
+    renderScorer(frame);
     const teams = frame.teams || [];
     const raids = raidTurns(list || []);
-    drawSpark(series, scoreIndex, teams.length ? ['#E08A12', '#1B7FAE'] : null, raids, frame.max_turns);
+    drawSpark(series, scoreIndex, teams.length ? TEAM_COLORS : null, raids, frame.max_turns);
+    const scores = teams.length ? teams.map((_, k) => ((frame.team_feedback || [])[k] || {}).target_score || 0) : [];
     document.querySelector('#charthint').innerHTML = teams.length
-      ? '<span class="a">1P</span> vs <span class="b">2P</span> · red = a raid turn'
+      ? '<span class="a">1P ' + pct(scores[0]) + '</span> vs <span class="b">2P ' + pct(scores[1]) + '</span> · red = a raid turn · only T' + frame.max_turns + ' counts'
       : esc(frame.target || '');
     const firstRaid = raids.length ? list[raids[0]].turn : null;
     document.querySelector('#chartmark').textContent = firstRaid ? 'T' + firstRaid + ' · FIRST RAID' : '';
     document.querySelector('#chartend').textContent = 'T' + frame.max_turns;
+    paintTimeline(scoreIndex === undefined ? (list ? list.length - 1 : 0) : scoreIndex, raids, frame.max_turns);
   }
 
   function replayScores() {
@@ -754,29 +795,32 @@
     lastAnimated = frameIndex;
     showFrame(frame, frameIndex > 0 ? frames[frameIndex - 1] : null, replayScores(), frameIndex, frames, animate);
     timeline.value = frameIndex;
-    document.querySelector('#framelabel').textContent = (frameIndex + 1) + ' / ' + frames.length;
-    status.textContent = frame.done && frameIndex === frames.length - 1 ? 'REPLAY · COMPLETE' : 'REPLAY';
+    document.querySelector('#framelabel').textContent = 'T' + frame.turn + ' / T' + frame.max_turns;
+    status.textContent = frame.done && frameIndex === frames.length - 1 ? 'REPLAY · END' : 'REPLAY';
     status.classList.remove('live');
+  }
+  function setPlayIcon() {
+    document.querySelector('#play-icon').setAttribute('d', playing ? 'M6 4h4v16H6zM14 4h4v16h-4z' : 'M7 4l13 8-13 8z');
   }
 
   function loadReplay(payload) {
     frames = payload.frames || [];
+    if (payload.config && payload.config.team_models) teamModels = payload.config.team_models;
     if (!frames.length) { status.textContent = 'NO FRAMES'; return; }
     timeline.max = frames.length - 1;
     showReplayFrame(0);
+    setPlayIcon();
     clearInterval(timer);
     timer = setInterval(() => {
       if (!playing || !frames.length) return;
-      if (frameIndex >= frames.length - 1) {
-        playing = false; playButton.innerHTML = '&#9654; REPLAY';
-        return;
-      }
+      if (frameIndex >= frames.length - 1) { playing = false; setPlayIcon(); return; }
       showReplayFrame(frameIndex + 1);
     }, 800);
   }
 
   let previousLiveFrame = null;
   function handleLive(payload) {
+    if (payload.team_models) teamModels = payload.team_models;
     const values = payload.team_feedback
       ? payload.team_feedback.map(f => f.target_score || 0)
       : payload.image_model_feedback ? [payload.image_model_feedback.target_score] : [];
@@ -787,16 +831,14 @@
     liveFrames.push(payload);
     layoutSeats(payload);
     [['left', seatLayout.left], ['right', seatLayout.right]].forEach(([side, slots]) => {
-      if (!slots.length) return;
-      // older turns lose their entrance animation so only the new one pops in
-      liveThreads[side] = liveThreads[side].map(h => h.split(' fresh"').join('"'));
-      liveThreads[side].push(threadHtml(payload, previousLiveFrame, slots, true));
+      if (slots.length) liveThreads[side].push(threadHtml(payload, previousLiveFrame, slots));
     });
     showFrame(payload, previousLiveFrame, liveScores, undefined, liveFrames, true);
     previousLiveFrame = payload;
-    status.textContent = payload.done ? 'COMPLETE' : 'LIVE';
+    status.textContent = payload.done ? 'ENDED' : 'LIVE';
     status.classList.toggle('live', !payload.done);
-    document.querySelector('#framelabel').textContent = payload.turn + ' / ' + payload.max_turns;
+    document.querySelector('#framelabel').textContent = 'T' + payload.turn + ' / T' + payload.max_turns;
+    timeline.max = Math.max(0, payload.max_turns - 1); timeline.value = payload.turn - 1;
   }
 
   const params = new URLSearchParams(location.search);
@@ -821,7 +863,8 @@
       .then(loadReplay)
       .catch(error => { status.textContent = 'FAILED: ' + error.message; });
   } else {
-    document.querySelector('.controls').style.visibility = 'hidden';
+    playButton.style.visibility = 'hidden';
+    timeline.disabled = true;
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const suppliedAddress = params.get('address');
     const defaultAddress = protocol + '//' + location.host + '/' + (replayMode ? 'replay' : 'global');
@@ -830,19 +873,25 @@
     socket.onerror = () => { status.textContent = 'NO CONNECTION'; };
     socket.onmessage = event => {
       const payload = JSON.parse(event.data);
-      if (payload.type === 'replay') { document.querySelector('.controls').style.visibility = ''; loadReplay(payload); }
+      if (payload.type === 'replay') { playButton.style.visibility = ''; timeline.disabled = false; loadReplay(payload); }
       else if (payload.type === 'board_update') return;
       else handleLive(payload);
     };
   }
 
   timeline.addEventListener('input', () => {
-    playing = false; playButton.innerHTML = '&#9654; PLAY'; showReplayFrame(timeline.value);
+    if (!frames.length) return;
+    playing = false; setPlayIcon(); showReplayFrame(timeline.value);
   });
   playButton.addEventListener('click', () => {
     if (!playing && frames.length && frameIndex >= frames.length - 1) showReplayFrame(0);
     playing = !playing;
-    playButton.innerHTML = playing ? '&#9646;&#9646; PAUSE' : '&#9654; PLAY';
+    setPlayIcon();
+  });
+  document.querySelector('#fullscreen').addEventListener('click', () => {
+    const player = document.querySelector('#player');
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (player.requestFullscreen) player.requestFullscreen();
   });
   window.addEventListener('resize', () => {
     if (frames.length) showReplayFrame(frameIndex);

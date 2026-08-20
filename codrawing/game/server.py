@@ -250,6 +250,9 @@ class GameRuntime:
         if self.engine.teams:
             snapshot["team_feedback"] = self.team_feedback_payload()
         snapshot["round_scores"] = self.round_scores.copy()
+        # The viewer shows the model behind each seat when the config names one.
+        if CONFIG.get("team_models"):
+            snapshot["team_models"] = list(CONFIG["team_models"])
         return snapshot
 
 

@@ -491,7 +491,8 @@ Your turn: read the message board, coordinate, then call paint_pixel once (or co
 
 async def main() -> None:
     claude_environment()
-    url = os.environ["CODRAWING_PLAYER_WS_URL"]
+    # The hosted runner sets COWORLD_PLAYER_WS_URL; local runs set the other.
+    url = os.environ.get("COWORLD_PLAYER_WS_URL") or os.environ["CODRAWING_PLAYER_WS_URL"]
     model = os.environ.get("AGENT_MODEL", "claude-sonnet-5")
     workspace = Path(os.environ.get("AGENT_WORKSPACE", "/tmp/agent-workspace")).resolve()
     workspace.mkdir(parents=True, exist_ok=True)

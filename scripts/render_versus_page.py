@@ -48,7 +48,10 @@ def render(run_dir: Path, output_path: Path | None = None) -> Path:
     )
 
     # Only the frames are needed to draw the match; traces stay in report.html.
-    payload = json.dumps({"frames": frames}, separators=(",", ":")).replace("</", "<\\/")
+    # The viewer also wants the run config for the model behind each seat
+    # (team_models); the seat tokens are secrets and stay out of the page.
+    config = {k: v for k, v in (replay.get("config") or {}).items() if k != "tokens"}
+    payload = json.dumps({"frames": frames, "config": config}, separators=(",", ":")).replace("</", "<\\/")
     data_tag = f'<script type="application/json" id="replay-data">{payload}</script>'
     # The data has to be parsed before the viewer script runs. Plain string
     # replace, not re.sub: the payload is full of backslash escapes.

@@ -23,7 +23,13 @@ on:
       module:
         description: "Player module to run"
         required: true
-        default: "codrawing.player.versus_llm_player"
+        default: "codrawing.player.agent_player"
+      target:
+        description: "Dockerfile stage: 'player' (slim websocket seat) or 'agent' (Claude Agent SDK seat)"
+        type: choice
+        required: true
+        default: agent
+        options: [agent, player]
       routing:
         description: "Where the seat's model calls go"
         type: choice
@@ -67,7 +73,11 @@ jobs:
           chmod 600 ~/.softmax/credentials.yaml
 
       - name: Build the player image
-        run: docker build --target player -t coplace-versus-player:ci .
+        run: |
+          docker build --target "${{ inputs.target }}" -t coplace-versus-player:ci .
+          echo "image size:"
+          docker image inspect coplace-versus-player:ci --format '{{.Size}}' \
+            | awk '{printf "  %.0f MiB (player cap is 512 MiB)\n", $1/1048576}' 
 
       - name: Upload the policy
         env:
@@ -85,6 +95,16 @@ jobs:
               # both in AWS Secrets Manager and injects them into the pod.
               args+=(--secret-env "OPENROUTER_API_KEY=$OPENROUTER_API_KEY"
                      --secret-env "OPENROUTER_MODEL=${{ inputs.model }}")
+              if [ "${{ inputs.target }}" = "agent" ]; then
+                # agent_player drives the claude CLI, which speaks the Anthropic
+                # Messages API. OpenRouter serves that shape at /api/v1/messages,
+                # so the local harness runs unchanged against any model there.
+                args+=(--secret-env "ANTHROPIC_BASE_URL=https://openrouter.ai/api"
+                       --secret-env "ANTHROPIC_AUTH_TOKEN=$OPENROUTER_API_KEY"
+                       --secret-env "AGENT_MODEL=${{ inputs.model }}"
+                       --secret-env "CLAUDE_CODE_MAX_CONTEXT_TOKENS=200000"
+                       --secret-env "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1")
+              fi
               if [ "${{ inputs.canvas_image }}" = "true" ]; then
                 args+=(--secret-env "CANVAS_IMAGE=1")
               fi
