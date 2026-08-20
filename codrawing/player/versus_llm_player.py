@@ -57,6 +57,14 @@ PAINT_TOOL = {
         "required": ["message", "paint"],
         "properties": {
             "message": {"type": "string", "maxLength": 240},
+            "leaving_my_zone": {
+                "type": "boolean",
+                "description": (
+                    "Set true ONLY to deliberately paint outside your own row band, "
+                    "for example to erase a harmful pixel or to attack the other team. "
+                    "Leave it out otherwise: your pixel is snapped back into your band."
+                ),
+            },
             "paint": {
                 "type": "object",
                 "additionalProperties": False,
@@ -117,6 +125,25 @@ def fallback_pixel(observation: dict[str, Any], slot: int) -> dict[str, Any]:
     return {"x": x + region["x"], "y": y + region["y"], "color": color}
 
 
+def seat_zone(team: dict[str, Any], slot: int) -> tuple[int, int, int, int, str]:
+    """The band of rows this seat owns, and what usually belongs there.
+
+    Every seat used to receive the same board and the same instructions, so
+    every seat named the same pixel and the whole team's writes collided. Bands
+    make that impossible: rows are split between teammates, and a pineapple
+    decomposes naturally down the same axis - crown at the top, body below.
+    """
+    region = team["region"]
+    mates = sorted(team["slots"])
+    rank = mates.index(slot) if slot in mates else 0
+    count = max(len(mates), 1)
+    height = region["height"]
+    top = region["y"] + (height * rank) // count
+    bottom = region["y"] + (height * (rank + 1)) // count - 1
+    where = ("the very top of the drawing", "the upper middle", "the lower middle", "the bottom")
+    return region["x"], region["x"] + region["width"] - 1, top, bottom, where[min(rank, 3)]
+
+
 def render_png(observation: dict[str, Any], block: int = 12) -> bytes:
     """The canvas as a PNG, built with the standard library only.
 
@@ -168,7 +195,10 @@ def render_canvas(observation: dict[str, Any]) -> tuple[str, str]:
     symbols = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     key = {value: symbols[index % len(symbols)] for index, value in enumerate(palette)}
 
-    rows = ["    " + "".join(str(x % 10) for x in range(width))]
+    rows = [
+        "    " + "".join(str(x // 10) if x >= 10 else " " for x in range(width)),
+        "    " + "".join(str(x % 10) for x in range(width)),
+    ]
     for y in range(height):
         rows.append(f"{y:3d} " + "".join(key.get(canvas[y * width + x], ".") for x in range(width)))
     legend = (
@@ -218,51 +248,72 @@ def build_prompt(observation: dict[str, Any], slot: int) -> str:
         else "There is no other team."
     )
 
-    return f"""You are seat {slot} on {team['name']} in an adversarial pixel-art game.
+    x0, x1, y0, y1, where = seat_zone(team, slot)
+    turn = int(observation["turn"])
+    max_turns = int(observation["max_turns"])
+    planning = turn < 3
 
-YOUR TARGET: draw a recognizable "{team['target']}".
-Your team scores ONLY on the rectangle x={region['x']}..{region['x'] + region['width'] - 1},
-y={region['y']}..{region['y'] + region['height'] - 1}. A frozen image classifier crops that
-rectangle every turn and scores it against "{team['target']}".
-{opponent_line}
-Regions are scoring boundaries, not painting limits: any seat may paint any pixel on the
-whole {width}x{height} canvas, including inside the other team's rectangle. Only the score on
-the FINAL turn decides the winner, so a lead can be taken away and must be defended.
+    if planning:
+        phase = f"""PHASE: PLANNING (turns 0-2 of {max_turns}). Before anyone can draw a
+{team['target']}, the team needs ONE agreed picture. In your message, state the plan in
+concrete coordinates: where the outline of the {team['target']} sits inside x={x0}..{x1},
+y={region['y']}..{region['y'] + region['height'] - 1}, roughly how wide and tall it is, and
+which part of it lands in each seat's rows. Read what your teammates already proposed and
+AGREE with it rather than inventing a rival plan - a shared mediocre plan beats four good
+private ones. Then paint the first pixel of YOUR part."""
+    else:
+        phase = f"""PHASE: EXECUTING (turn {turn} of {max_turns}). The plan is settled. Do not
+renegotiate it. Paint the next pixel your part needs and say which part you advanced."""
 
-Canvas: {width}x{height}; x grows right, y grows down; x=0..{width - 1}, y=0..{height - 1}.
-Turn {observation['turn']} of {observation['max_turns']}.
-Pick whatever colour the drawing needs at that pixel, as #RRGGBB - a gold body
-and a green crown read as a pineapple; four seats each painting one fixed colour
-never will. Use #FFFFFF to erase. Agree on the palette with your team and stick
-to it. (Your default colour if you cannot decide is {color}.)
-Your teammates are seats {mates}. All seats act SIMULTANEOUSLY. If two seats paint the same
-pixel on the same turn, BOTH writes are dropped, so claim your next coordinate on the board
-and route around what your teammates claimed.
+    return f"""You are seat {slot} on {team['name']}. Four of you are drawing ONE picture
+together, at the same time, one pixel each per turn. You are not drawing alone.
 
-The canvas, one character per pixel ('.' is unpainted). Column numbers run
-across the top, row numbers down the left, so the character at column x and
-row y IS pixel (x, y):
+THE GOAL: together, make the region below look like a recognizable "{team['target']}".
+
+YOUR TEAM'S REGION IS x={x0} TO {x1}. A classifier crops exactly that rectangle and scores
+it against "{team['target']}". A pixel you paint outside x={x0}..{x1} does NOTHING for your
+score. Check the x of every pixel before you name it.
+
+YOUR OWN ROWS ARE y={y0} TO {y1} - {where} of the picture.
+Your three teammates own the other rows and are painting THIS SAME TURN. If two of you name
+the same pixel, BOTH writes are thrown away and the turn is wasted. That is why the rows are
+split: stay inside y={y0}..{y1} and you can never collide with a teammate. If you truly need
+a pixel outside your rows, you must set leaving_my_zone=true, otherwise your pixel is snapped
+back into your band.
+
+{phase}
+
+HOW TO DRAW SOMETHING RECOGNIZABLE:
+- Make it BIG. Fill most of the {x1 - x0 + 1} columns and most of the rows. A small shape in
+  the middle of a white field reads as nothing.
+- Outline first, then fill. A closed outline of the right silhouette scores far better than a
+  scattered cloud of correct-coloured pixels.
+- Colour is yours to choose per pixel: use the colours the real object has, and use the same
+  ones your teammates announced.
+- Build on what is already painted. Extend an existing stroke by one pixel rather than
+  starting a new mark somewhere empty.
+
+Canvas: {width} wide, {height} tall. x grows right, y grows down.
+Turn {turn} of {max_turns}.
+
+The canvas, one character per pixel ('.' is unpainted). Column numbers read down the top two
+rows, row numbers on the left, so the character at column x and row y IS pixel (x, y):
 {canvas_art}
 {palette_legend}
 
-Your team's board (only your team can read this):
+Your team's board (only your team sees this):
 {board}
 
 {score_block}
 
-How to play well:
-- Agree on ONE shape plan early, then execute it. Do not renegotiate a working plan.
-- Draw the target big enough to fill a good part of your rectangle. A few scattered pixels
-  never reads as anything.
-- The score delta after each turn is your only ground truth. If your accepted pixel dropped
-  the score, erase that exact pixel with #FFFFFF next turn.
-- Late in the episode, protect a good score instead of experimenting. Repainting one of your
-  own pixels in its existing color is a legal no-op HOLD move.
-- Attacking the other team's rectangle costs you a turn you could have spent drawing. Do it
-  only when your own drawing is finished and their score is close to yours.
+{opponent_line}
+Regions are scoring boundaries, not painting limits: you MAY paint in the other team's
+rectangle to spoil their picture, but it costs you a turn you could have spent on your own,
+and it needs leaving_my_zone=true. Only the FINAL turn decides the winner, so a lead can be
+taken away, and must be defended.
 
-Call the paint_pixel tool exactly once. Your message should say which part of the plan you
-just advanced and which pixel you will take next. Do not write any prose outside the tool call.
+Call the paint_pixel tool exactly once. Your message must name the pixel you took and the
+next one you intend, so your teammates route around you. No prose outside the tool call.
 """
 
 
@@ -408,6 +459,16 @@ def sanitize(decision: dict[str, Any], observation: dict[str, Any], slot: int) -
     color = str(paint.get("color", "")).upper()
     if not re.fullmatch(r"#[0-9A-F]{6}", color):
         color = SEAT_COLORS[slot % len(SEAT_COLORS)]
+
+    # Snap strays home. A pixel a teammate is also reaching for is a wasted turn,
+    # and a pixel outside the team's rectangle does nothing for the score, so both
+    # are corrected unless the seat said it meant to leave.
+    if not decision.get("leaving_my_zone"):
+        team = team_of(observation, slot)
+        if team is not None:
+            x0, x1, y0, y1, _ = seat_zone(team, slot)
+            x = max(x0, min(x1, x))
+            y = max(y0, min(y1, y))
     return {"x": x, "y": y, "color": color}
 
 
