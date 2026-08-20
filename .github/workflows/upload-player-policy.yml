@@ -33,7 +33,12 @@ on:
       model:
         description: "Model id: an OpenRouter slug, or a Bedrock model id"
         required: true
-        default: "mistralai/mistral-nemo"
+        default: "google/gemini-2.5-flash-lite"
+      canvas_image:
+        description: "Also send the canvas as a PNG (needs a vision model)"
+        type: boolean
+        required: true
+        default: true
 
 jobs:
   upload:
@@ -76,6 +81,9 @@ jobs:
               # both in AWS Secrets Manager and injects them into the pod.
               args+=(--secret-env "OPENROUTER_API_KEY=$OPENROUTER_API_KEY"
                      --secret-env "OPENROUTER_MODEL=${{ inputs.model }}")
+              if [ "${{ inputs.canvas_image }}" = "true" ]; then
+                args+=(--secret-env "CANVAS_IMAGE=1")
+              fi
               ;;
             bedrock)
               args+=(--use-bedrock --bedrock-model "${{ inputs.model }}")

@@ -20,11 +20,14 @@ stalling the turn barrier.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 import random
 import re
+import struct
 import time
+import zlib
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -112,6 +115,44 @@ def fallback_pixel(observation: dict[str, Any], slot: int) -> dict[str, Any]:
         return {"x": region["x"], "y": region["y"], "color": SEAT_COLORS[slot % len(SEAT_COLORS)]}
     x, y, color = plan[min(int(observation["turn"]), len(plan) - 1)]
     return {"x": x + region["x"], "y": y + region["y"], "color": color}
+
+
+def render_png(observation: dict[str, Any], block: int = 12) -> bytes:
+    """The canvas as a PNG, built with the standard library only.
+
+    The player image carries no imaging dependency, so the encoder is written
+    out here: one uncompressed-filter scanline per row, upscaled so each canvas
+    pixel becomes a block a vision model can actually resolve.
+    """
+    width, height = int(observation["width"]), int(observation["height"])
+    canvas = observation["canvas"]
+
+    def rgb(value: str) -> bytes:
+        text = value.lstrip("#")
+        if len(text) != 6:
+            return b"\xff\xff\xff"
+        try:
+            return bytes.fromhex(text)
+        except ValueError:
+            return b"\xff\xff\xff"
+
+    raw = bytearray()
+    for y in range(height):
+        row = b"".join(rgb(canvas[y * width + x]) * block for x in range(width))
+        for _ in range(block):
+            raw += b"\x00" + row
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", width * block, height * block, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+        + chunk(b"IEND", b"")
+    )
 
 
 def render_canvas(observation: dict[str, Any]) -> tuple[str, str]:
@@ -243,7 +284,7 @@ OPENAI_TOOLS = [
 ]
 
 
-def call_model(prompt: str, timeout: float) -> tuple[str, dict[str, Any]]:
+def call_model(prompt: str, timeout: float, image: bytes | None = None) -> tuple[str, dict[str, Any]]:
     """One model call. Returns (wire format, response payload).
 
     Routing is chosen by which credential the pod was given, cheapest-intent
@@ -261,13 +302,23 @@ def call_model(prompt: str, timeout: float) -> tuple[str, dict[str, Any]]:
             "Authorization": f"Bearer {openrouter_key}",
             "X-Title": "coplace-versus",
         }
+        content: Any = prompt
+        if image is not None:
+            encoded = base64.b64encode(image).decode()
+            content = [
+                {"type": "text", "text": prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{encoded}"},
+                },
+            ]
         payload = _post_json(
             f"{base}/chat/completions",
             {
                 "model": model,
                 "max_tokens": 640,
                 "temperature": 0.7,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [{"role": "user", "content": content}],
                 "tools": OPENAI_TOOLS,
                 "tool_choice": {"type": "function", "function": {"name": "paint_pixel"}},
             },
@@ -363,10 +414,11 @@ def sanitize(decision: dict[str, Any], observation: dict[str, Any], slot: int) -
 def decide(observation: dict[str, Any], slot: int, attempts: int, timeout: float) -> dict[str, Any]:
     """Return {'paint': ..., 'message': ...}; never raise."""
     prompt = build_prompt(observation, slot)
+    image = render_png(observation) if os.environ.get("CANVAS_IMAGE") == "1" else None
     last_error: str | None = None
     for attempt in range(attempts):
         try:
-            wire, payload = call_model(prompt, timeout)
+            wire, payload = call_model(prompt, timeout, image)
             decision = extract_decision(wire, payload)
             message = str(decision.get("message") or "")[:240]
             return {"paint": sanitize(decision, observation, slot), "message": message}
