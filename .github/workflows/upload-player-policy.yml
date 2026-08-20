@@ -1,6 +1,12 @@
-# Builds the slim baseline player image on a native amd64 runner and uploads it
-# as a Coworld policy. Runs remotely so no container image is ever built on the
-# laptop: local builds fill the boot disk, which stops macOS from growing swap.
+# Builds the slim player image on a native amd64 runner and uploads it as a
+# Coworld policy. Runs remotely so no container image is ever built on the
+# laptop: local builds fill the boot disk, and a full boot disk stops macOS
+# from growing its swap file.
+#
+# The image carries every player module, so `module` picks which one this
+# policy runs. LLM seats need `use_bedrock: true`; the platform then injects
+# AWS_ENDPOINT_URL_BEDROCK_RUNTIME and BEDROCK_MODEL into the pod and signs the
+# calls, so no model credentials ship in the image.
 #
 # Needs the SOFTMAX_CREDENTIALS repo secret: the exact content of
 # ~/.softmax/credentials.yaml for an account allowed to upload policies.
@@ -11,9 +17,22 @@ on:
   workflow_dispatch:
     inputs:
       name:
-        description: "Policy name to upload under (e.g. coplace-template-baseline)"
+        description: "Policy name to upload under"
         required: true
-        default: "coplace-template-baseline"
+        default: "coplace-versus-llm"
+      module:
+        description: "Player module to run"
+        required: true
+        default: "codrawing.player.versus_llm_player"
+      use_bedrock:
+        description: "Give the policy hosted Bedrock access"
+        type: boolean
+        required: true
+        default: true
+      bedrock_model:
+        description: "Model id written into BEDROCK_MODEL"
+        required: true
+        default: "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 jobs:
   upload:
@@ -41,4 +60,11 @@ jobs:
         run: docker build --target player -t coplace-versus-player:ci .
 
       - name: Upload the policy
-        run: coworld upload-policy coplace-versus-player:ci --name "${{ inputs.name }}"
+        run: |
+          args=(coplace-versus-player:ci
+                --name "${{ inputs.name }}"
+                --run python --run -m --run "${{ inputs.module }}")
+          if [ "${{ inputs.use_bedrock }}" = "true" ]; then
+            args+=(--use-bedrock --bedrock-model "${{ inputs.bedrock_model }}")
+          fi
+          coworld upload-policy "${args[@]}"
