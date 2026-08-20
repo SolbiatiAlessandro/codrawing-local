@@ -48,6 +48,9 @@ SEAT_COLORS = (
     "#F97316",
 )
 
+# How many past turns of this seat's own transcript to carry.
+HISTORY_TURNS = int(os.environ.get("HISTORY_TURNS", "16"))
+
 PAINT_TOOL = {
     "name": "paint_pixel",
     "description": "Post one short message to your team's board and paint one canvas pixel.",
@@ -335,7 +338,7 @@ OPENAI_TOOLS = [
 ]
 
 
-def call_model(prompt: str, timeout: float, image: bytes | None = None) -> tuple[str, dict[str, Any]]:
+def call_model(messages: list[dict[str, Any]], timeout: float, image: bytes | None = None) -> tuple[str, dict[str, Any]]:
     """One model call. Returns (wire format, response payload).
 
     Routing is chosen by which credential the pod was given, cheapest-intent
@@ -353,11 +356,12 @@ def call_model(prompt: str, timeout: float, image: bytes | None = None) -> tuple
             "Authorization": f"Bearer {openrouter_key}",
             "X-Title": "coplace-versus",
         }
-        content: Any = prompt
+        turn_messages = [dict(m) for m in messages]
+        content: Any = turn_messages[-1]["content"]
         if image is not None:
             encoded = base64.b64encode(image).decode()
             content = [
-                {"type": "text", "text": prompt},
+                {"type": "text", "text": content},
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:image/png;base64,{encoded}"},
@@ -369,7 +373,7 @@ def call_model(prompt: str, timeout: float, image: bytes | None = None) -> tuple
                 "model": model,
                 "max_tokens": 640,
                 "temperature": 0.7,
-                "messages": [{"role": "user", "content": content}],
+                "messages": turn_messages[:-1] + [{"role": "user", "content": content}],
                 "tools": OPENAI_TOOLS,
                 "tool_choice": {"type": "function", "function": {"name": "paint_pixel"}},
             },
@@ -382,7 +386,7 @@ def call_model(prompt: str, timeout: float, image: bytes | None = None) -> tuple
     body: dict[str, Any] = {
         "max_tokens": 640,
         "temperature": 0.7,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
         "tools": [PAINT_TOOL],
         "tool_choice": {"type": "tool", "name": "paint_pixel"},
     }
@@ -463,7 +467,7 @@ def sanitize(decision: dict[str, Any], observation: dict[str, Any], slot: int) -
     # Snap strays home. A pixel a teammate is also reaching for is a wasted turn,
     # and a pixel outside the team's rectangle does nothing for the score, so both
     # are corrected unless the seat said it meant to leave.
-    if not decision.get("leaving_my_zone"):
+    if os.environ.get("SEAT_ZONES") == "1" and not decision.get("leaving_my_zone"):
         team = team_of(observation, slot)
         if team is not None:
             x0, x1, y0, y1, _ = seat_zone(team, slot)
@@ -472,14 +476,34 @@ def sanitize(decision: dict[str, Any], observation: dict[str, Any], slot: int) -
     return {"x": x, "y": y, "color": color}
 
 
-def decide(observation: dict[str, Any], slot: int, attempts: int, timeout: float) -> dict[str, Any]:
-    """Return {'paint': ..., 'message': ...}; never raise."""
-    prompt = build_prompt(observation, slot)
+def turn_recap(decision: dict[str, Any], observation: dict[str, Any], slot: int) -> str:
+    """What this seat did last turn, in its own transcript, so it remembers."""
+    paint = decision["paint"]
+    note = decision.get("message") or ""
+    return f"I painted ({paint['x']}, {paint['y']}) with {paint['color']}. I told the team: {note}"
+
+
+def decide(
+    observation: dict[str, Any],
+    slot: int,
+    attempts: int,
+    timeout: float,
+    history: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Return {'paint': ..., 'message': ...}; never raise.
+
+    `history` is this seat's own transcript. A seat that starts from a blank
+    context every turn cannot hold a plan: it will state a good outline on turn
+    zero and have forgotten it by turn five. Carrying its prior decisions is the
+    difference between fifty independent guesses and one agent drawing.
+    """
+    messages = list(history or [])
+    messages.append({"role": "user", "content": build_prompt(observation, slot)})
     image = render_png(observation) if os.environ.get("CANVAS_IMAGE") == "1" else None
     last_error: str | None = None
     for attempt in range(attempts):
         try:
-            wire, payload = call_model(prompt, timeout, image)
+            wire, payload = call_model(messages, timeout, image)
             decision = extract_decision(wire, payload)
             message = str(decision.get("message") or "")[:240]
             return {"paint": sanitize(decision, observation, slot), "message": message}
@@ -521,6 +545,7 @@ async def main() -> None:
 
     async with websockets.connect(url, max_size=None) as websocket:
         slot: int | None = None
+        history: list[dict[str, Any]] = []
         async for raw in websocket:
             observation = cast(dict[str, Any], json.loads(raw))
             kind = observation.get("type")
@@ -539,7 +564,27 @@ async def main() -> None:
 
             # The model call blocks; keep it off the event loop so the socket
             # stays responsive to board updates while this seat is thinking.
-            decision = await asyncio.to_thread(decide, observation, slot, attempts, timeout)
+            decision = await asyncio.to_thread(
+                decide, observation, slot, attempts, timeout, history
+            )
+
+            # Keep the seat's own decisions, drop the boards they were made
+            # against. The reasoning is what has to survive; re-sending fifty
+            # copies of the grid would only pay for the same picture again.
+            if history:
+                for entry in history:
+                    if entry["role"] == "user" and len(entry["content"]) > 400:
+                        entry["content"] = "(earlier board, omitted)"
+            history.append(
+                {"role": "user", "content": f"Turn {observation['turn']}: board as shown above."}
+            )
+            history.append(
+                {"role": "assistant", "content": turn_recap(decision, observation, slot)}
+            )
+            if len(history) > 2 * HISTORY_TURNS:
+                # Always keep the opening exchange: it holds the agreed plan.
+                history[:] = history[:2] + history[-2 * (HISTORY_TURNS - 1) :]
+
             payload: dict[str, Any] = {"turn": observation["turn"], "paint": decision["paint"]}
             if decision["message"]:
                 payload["message"] = decision["message"]
