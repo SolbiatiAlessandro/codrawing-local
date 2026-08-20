@@ -67,6 +67,38 @@ def make_template(target: str, width: int, height: int) -> list[Pixel]:
         _put(canvas, scale(_ellipse(12, 16, 3, 2, "#E7B77A")), width, height)
         _put(canvas, scale([(9, 11, "#111827"), (15, 11, "#111827"), (12, 15, "#111827")]), width, height)
         _put(canvas, scale(_line(10, 18, 14, 18, "#8B1E3F")), width, height)
+    elif target.lower() == "pineapple":
+        # A tall golden body with a cross-hatched rind and a spiked green crown.
+        # The hatch is masked to the body so the rind never spills onto bare
+        # canvas, which reads as noise to the classifier.
+        _put(canvas, scale(_ellipse(12, 15, 5, 7, "#F59E0B")), width, height)
+        body = set(canvas)
+        hatch: dict[tuple[int, int], str] = {}
+        for offset in range(-8, 9, 5):
+            _put(hatch, scale(_line(12 + offset, 8, 12 + offset + 7, 22, "#B45309")), width, height)
+            _put(hatch, scale(_line(12 + offset, 22, 12 + offset + 7, 8, "#B45309")), width, height)
+        for key, color in hatch.items():
+            if key in body:
+                canvas[key] = color
+        for dx, tip in ((-4, 4), (-2, 2), (0, 1), (2, 2), (4, 4)):
+            _put(canvas, scale(_line(12, 9, 12 + dx, tip, "#22C55E")), width, height)
+    elif target.lower() == "strawberry":
+        # Wide shoulders tapering to a point, pale seeds, and a leafy calyx.
+        _put(canvas, scale(_ellipse(12, 12, 6, 4, "#EF4444")), width, height)
+        for step in range(10):
+            half = 6.0 - step * 0.62
+            row = 12 + step
+            _put(
+                canvas,
+                scale(_line(round(12 - half), row, round(12 + half), row, "#EF4444")),
+                width,
+                height,
+            )
+        for seed_x, seed_y in ((9, 11), (15, 11), (12, 13), (10, 16), (14, 16), (12, 18)):
+            _put(canvas, scale([(seed_x, seed_y, "#FDE68A")]), width, height)
+        _put(canvas, scale(_ellipse(12, 7, 5, 2, "#22C55E")), width, height)
+        for dx in (-4, -2, 0, 2, 4):
+            _put(canvas, scale(_line(12 + dx, 6, 12 + dx, 4, "#16A34A")), width, height)
     else:
         _put(canvas, scale(_ellipse(12, 13, 7, 6, "#AAB4C4")), width, height)
         _put(canvas, scale(_line(6, 9, 7, 3, "#AAB4C4")), width, height)
