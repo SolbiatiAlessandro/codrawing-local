@@ -231,7 +231,12 @@ class RunsHandler(SimpleHTTPRequestHandler):
             replay = target.parent / "replay.json"
             if not replay.exists():
                 break
-            fresh = target.exists() and target.stat().st_mtime >= replay.stat().st_mtime
+            # The template can change too (a redesigned viewer), so compare
+            # against the newest of the replay and the renderer's sources.
+            sources = [replay.stat().st_mtime, Path(renderer.__code__.co_filename).stat().st_mtime]
+            if hasattr(render_versus_page, 'VIEWER') and renderer is render_versus_page.render:
+                sources.append(render_versus_page.VIEWER.stat().st_mtime)
+            fresh = target.exists() and target.stat().st_mtime >= max(sources)
             if not fresh:
                 try:
                     renderer(target.parent)

@@ -61,7 +61,9 @@ def render(run_dir: Path, output_path: Path | None = None) -> Path:
     start = body.index(marker)
     body = body[:start] + body[body.index("</script>", start) :]
 
-    page = f"<title>{title}</title>\n<style>{style}</style>\n{body}"
+    # Served from a plain file server the page has no other charset hint, and
+    # the viewer uses middle dots and arrows; without this Chrome sniffs GBK.
+    page = f'<meta charset="utf-8">\n<title>{title}</title>\n<style>{style}</style>\n{body}'
     output_path.write_text(page)
     print(f"wrote {output_path} ({output_path.stat().st_size} bytes)")
     return output_path

@@ -51,6 +51,15 @@ SEAT_COLORS = (
 # How many past turns of this seat's own transcript to carry.
 HISTORY_TURNS = int(os.environ.get("HISTORY_TURNS", "16"))
 
+# A shape plan does not fit in a tweet. In the local runs that draw a
+# recognisable pineapple, the median board post is 324 characters and the
+# longest is 2648; a 240-character cap truncated 72% of them mid-sentence.
+MESSAGE_LIMIT = int(os.environ.get("MESSAGE_LIMIT", "2000"))
+
+# How many tool steps a seat may take within one turn: it can read the board,
+# post, read again to see what a teammate just claimed, then paint.
+TURN_STEPS = int(os.environ.get("TURN_STEPS", "4"))
+
 PAINT_TOOL = {
     "name": "paint_pixel",
     "description": "Post one short message to your team's board and paint one canvas pixel.",
@@ -59,7 +68,7 @@ PAINT_TOOL = {
         "additionalProperties": False,
         "required": ["message", "paint"],
         "properties": {
-            "message": {"type": "string", "maxLength": 240},
+            "message": {"type": "string", "maxLength": MESSAGE_LIMIT},
             "leaving_my_zone": {
                 "type": "boolean",
                 "description": (
@@ -326,15 +335,42 @@ def _post_json(url: str, body: dict[str, Any], headers: dict[str, str], timeout:
         return cast(dict[str, Any], json.loads(response.read()))
 
 
+BOARD_READ_TOOL = {
+    "name": "message_board_read",
+    "description": (
+        "Read your team's board RIGHT NOW, including posts your teammates made "
+        "during this same turn. Call this before painting to see which pixels "
+        "they have already claimed this turn."
+    ),
+    "input_schema": {"type": "object", "additionalProperties": False, "properties": {}},
+}
+
+BOARD_SEND_TOOL = {
+    "name": "message_board_send",
+    "description": (
+        "Post to your team's board immediately, before you paint. Teammates see "
+        "it this turn. Use it to propose the shape plan and to claim the pixel "
+        "you are about to take. Set public=true to speak to the other team too."
+    ),
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["text"],
+        "properties": {
+            "text": {"type": "string", "maxLength": MESSAGE_LIMIT},
+            "public": {"type": "boolean"},
+        },
+    },
+}
+
+TURN_TOOLS = [PAINT_TOOL, BOARD_READ_TOOL, BOARD_SEND_TOOL]
+
 OPENAI_TOOLS = [
     {
         "type": "function",
-        "function": {
-            "name": PAINT_TOOL["name"],
-            "description": PAINT_TOOL["description"],
-            "parameters": PAINT_TOOL["input_schema"],
-        },
+        "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]},
     }
+    for t in TURN_TOOLS
 ]
 
 
@@ -382,7 +418,7 @@ def call_model(messages: list[dict[str, Any]], timeout: float, image: bytes | No
                 ),
                 "messages": turn_messages[:-1] + [{"role": "user", "content": content}],
                 "tools": OPENAI_TOOLS,
-                "tool_choice": {"type": "function", "function": {"name": "paint_pixel"}},
+                "tool_choice": "required",
             },
             headers,
             timeout,
@@ -394,8 +430,8 @@ def call_model(messages: list[dict[str, Any]], timeout: float, image: bytes | No
         "max_tokens": 640,
         "temperature": 0.7,
         "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
-        "tools": [PAINT_TOOL],
-        "tool_choice": {"type": "tool", "name": "paint_pixel"},
+        "tools": TURN_TOOLS,
+        "tool_choice": {"type": "any"},
     }
     if endpoint:
         # Hosted: the sidecar holds the identity and re-signs. Send no auth.
@@ -419,7 +455,7 @@ def call_model(messages: list[dict[str, Any]], timeout: float, image: bytes | No
     return "anthropic", _post_json("https://api.anthropic.com/v1/messages", body, headers, timeout)
 
 
-def extract_decision(wire: str, payload: dict[str, Any]) -> dict[str, Any]:
+def extract_call(wire: str, payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if wire == "openai":
         choices = payload.get("choices") or []
         if not choices:
@@ -427,35 +463,36 @@ def extract_decision(wire: str, payload: dict[str, Any]) -> dict[str, Any]:
         message = choices[0].get("message") or {}
         for call in message.get("tool_calls") or []:
             function = call.get("function") or {}
-            if function.get("name") == "paint_pixel":
+            name = str(function.get("name") or "")
+            if name in {t["name"] for t in TURN_TOOLS}:
                 arguments = function.get("arguments")
                 value = json.loads(arguments) if isinstance(arguments, str) else arguments
                 if isinstance(value, dict):
-                    return cast(dict[str, Any], value)
+                    return name, cast(dict[str, Any], value)
         text = message.get("content") or ""
         match = re.search(r"\{", text)
         if match is None:
-            raise ValueError("model returned no paint_pixel tool call")
+            raise ValueError("model returned no tool call")
         value, _ = json.JSONDecoder().raw_decode(text[match.start() :])
         if not isinstance(value, dict):
             raise ValueError("model returned a non-object decision")
-        return cast(dict[str, Any], value)
+        return "paint_pixel", cast(dict[str, Any], value)
 
     for block in payload.get("content", []):
-        if block.get("type") == "tool_use" and block.get("name") == "paint_pixel":
+        if block.get("type") == "tool_use" and block.get("name") in {t["name"] for t in TURN_TOOLS}:
             value = block.get("input")
             if isinstance(value, dict):
-                return cast(dict[str, Any], value)
+                return str(block["name"]), cast(dict[str, Any], value)
     text = "".join(
         block.get("text", "") for block in payload.get("content", []) if block.get("type") == "text"
     )
     match = re.search(r"\{", text)
     if match is None:
-        raise ValueError("model returned no paint_pixel tool call")
+        raise ValueError("model returned no tool call")
     value, _ = json.JSONDecoder().raw_decode(text[match.start() :])
     if not isinstance(value, dict):
         raise ValueError("model returned a non-object decision")
-    return cast(dict[str, Any], value)
+    return "paint_pixel", cast(dict[str, Any], value)
 
 
 def sanitize(decision: dict[str, Any], observation: dict[str, Any], slot: int) -> dict[str, Any]:
@@ -490,50 +527,105 @@ def turn_recap(decision: dict[str, Any], observation: dict[str, Any], slot: int)
     return f"I painted ({paint['x']}, {paint['y']}) with {paint['color']}. I told the team: {note}"
 
 
-def decide(
+async def run_turn(
+    websocket: Any,
     observation: dict[str, Any],
     slot: int,
+    history: list[dict[str, Any]],
+    board: list[dict[str, Any]],
     attempts: int,
     timeout: float,
-    history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Return {'paint': ..., 'message': ...}; never raise.
+    """Play one turn as a short tool loop, ending in exactly one painted pixel.
 
-    `history` is this seat's own transcript. A seat that starts from a blank
-    context every turn cannot hold a plan: it will state a good outline on turn
-    zero and have forgotten it by turn five. Carrying its prior decisions is the
-    difference between fifty independent guesses and one agent drawing.
+    A seat used to get a single blind call: it decided while its three
+    teammates were deciding, all of them looking at the same stale board, so
+    they reached for the same pixel. The server has always accepted live board
+    posts outside the paint barrier - it just was never used. Now a seat can
+    read the board, claim a pixel out loud, read again to see what a teammate
+    claimed in the meantime, and only then paint.
     """
-    messages = list(history or [])
+    messages = list(history)
     messages.append({"role": "user", "content": build_prompt(observation, slot)})
     image = render_png(observation) if os.environ.get("CANVAS_IMAGE") == "1" else None
-    last_error: str | None = None
-    for attempt in range(attempts):
-        try:
-            wire, payload = call_model(messages, timeout, image)
-            decision = extract_decision(wire, payload)
-            message = str(decision.get("message") or "")[:240]
-            return {"paint": sanitize(decision, observation, slot), "message": message}
-        except HTTPError as error:
-            detail = ""
+    turn = int(observation["turn"])
+    posted = ""
+
+    for step in range(TURN_STEPS):
+        last_error: str | None = None
+        name, args = "", {}
+        for attempt in range(attempts):
             try:
-                detail = error.read().decode()[:400]
-            except Exception:
-                pass
-            last_error = f"HTTP {error.code} {detail}"
-            # 429 is the throttle/spend-limit signal: back off and retry.
-            if error.code in (429, 500, 502, 503, 504) and attempt < attempts - 1:
-                time.sleep(min(8.0, (2**attempt) + random.random()))
-                continue
+                wire, payload = await asyncio.to_thread(call_model, messages, timeout, image)
+                name, args = extract_call(wire, payload)
+                break
+            except HTTPError as error:
+                detail = ""
+                try:
+                    detail = error.read().decode()[:300]
+                except Exception:
+                    pass
+                last_error = f"HTTP {error.code} {detail}"
+                if error.code in (429, 500, 502, 503, 504) and attempt < attempts - 1:
+                    await asyncio.sleep(min(8.0, (2**attempt) + random.random()))
+                    continue
+                break
+            except (URLError, TimeoutError, ValueError, RuntimeError) as error:
+                last_error = f"{type(error).__name__}: {error}"
+                if attempt < attempts - 1:
+                    await asyncio.sleep(1.0 + attempt)
+                    continue
+                break
+        if not name:
+            print(f"[seat {slot}] model call failed: {last_error}", flush=True)
             break
-        except (URLError, TimeoutError, ValueError, RuntimeError) as error:
-            last_error = f"{type(error).__name__}: {error}"
-            if attempt < attempts - 1:
-                time.sleep(min(4.0, 1.0 + attempt))
-                continue
-            break
-    print(f"[seat {slot}] model call failed, using template fallback: {last_error}", flush=True)
-    return {"paint": fallback_pixel(observation, slot), "message": ""}
+
+        if name == "paint_pixel":
+            return {
+                "paint": sanitize(args, observation, slot),
+                "message": str(args.get("message") or "")[:MESSAGE_LIMIT],
+            }
+
+        if name == "message_board_read":
+            visible = "\n".join(
+                f"T{m['turn']} {m.get('player', '?')}: {m['text']}" for m in board[-25:]
+            ) or "(nothing posted yet)"
+            messages.append({"role": "assistant", "content": "I read the board."})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"Board right now, including posts made this turn:\n{visible}\n\n"
+                        "Now claim a pixel nobody else has taken and call paint_pixel."
+                    ),
+                }
+            )
+            continue
+
+        if name == "message_board_send":
+            text = str(args.get("text") or "")[:MESSAGE_LIMIT]
+            if text:
+                posted = text
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "turn": turn,
+                            "type": "message",
+                            "text": text,
+                            "public": bool(args.get("public")),
+                        }
+                    )
+                )
+            messages.append({"role": "assistant", "content": f"I posted: {text}"})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": "Posted, and your teammates can see it now. Read the board again or paint.",
+                }
+            )
+            continue
+
+    return {"paint": fallback_pixel(observation, slot), "message": posted}
 
 
 async def main() -> None:
@@ -553,49 +645,76 @@ async def main() -> None:
     async with websockets.connect(url, max_size=None) as websocket:
         slot: int | None = None
         history: list[dict[str, Any]] = []
-        async for raw in websocket:
-            observation = cast(dict[str, Any], json.loads(raw))
-            kind = observation.get("type")
-            if kind == "welcome":
-                slot = int(observation["slot"])
-                print(f"[player] connected as seat {slot}", flush=True)
-                continue
-            if kind == "final":
-                print(f"[seat {slot}] episode finished", flush=True)
-                return
-            if kind != "observation" or slot is None:
-                continue
-            if team_of(observation, slot) is None:
-                await websocket.send(json.dumps({"turn": observation["turn"]}))
-                continue
+        board: list[dict[str, Any]] = []
+        observations: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        finished = asyncio.Event()
 
-            # The model call blocks; keep it off the event loop so the socket
-            # stays responsive to board updates while this seat is thinking.
-            decision = await asyncio.to_thread(
-                decide, observation, slot, attempts, timeout, history
-            )
+        async def receive() -> None:
+            """Keep draining the socket so board posts arrive while we think."""
+            nonlocal slot
+            try:
+                async for raw in websocket:
+                    event = cast(dict[str, Any], json.loads(raw))
+                    kind = event.get("type")
+                    if kind == "welcome":
+                        slot = int(event["slot"])
+                        print(f"[player] connected as seat {slot}", flush=True)
+                    elif kind == "board_update":
+                        board.append(event["message"])
+                    elif kind == "observation":
+                        board.extend(event.get("recent_messages") or [])
+                        del board[:-50]
+                        await observations.put(event)
+                    elif kind == "final":
+                        finished.set()
+                        return
+            finally:
+                finished.set()
 
-            # Keep the seat's own decisions, drop the boards they were made
-            # against. The reasoning is what has to survive; re-sending fifty
-            # copies of the grid would only pay for the same picture again.
-            if history:
+        receiver = asyncio.create_task(receive())
+        try:
+            while not finished.is_set():
+                getter = asyncio.create_task(observations.get())
+                done, _ = await asyncio.wait(
+                    {getter, asyncio.create_task(finished.wait())},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if getter not in done:
+                    getter.cancel()
+                    break
+                observation = getter.result()
+                if slot is None or team_of(observation, slot) is None:
+                    await websocket.send(json.dumps({"turn": observation["turn"]}))
+                    continue
+
+                decision = await run_turn(
+                    websocket, observation, slot, history, board, attempts, timeout
+                )
+
+                # Keep the seat's own decisions, drop the boards they were made
+                # against: the reasoning has to survive, the grids do not.
                 for entry in history:
                     if entry["role"] == "user" and len(entry["content"]) > 400:
                         entry["content"] = "(earlier board, omitted)"
-            history.append(
-                {"role": "user", "content": f"Turn {observation['turn']}: board as shown above."}
-            )
-            history.append(
-                {"role": "assistant", "content": turn_recap(decision, observation, slot)}
-            )
-            if len(history) > 2 * HISTORY_TURNS:
-                # Always keep the opening exchange: it holds the agreed plan.
-                history[:] = history[:2] + history[-2 * (HISTORY_TURNS - 1) :]
+                history.append(
+                    {"role": "user", "content": f"Turn {observation['turn']}: board as shown above."}
+                )
+                history.append(
+                    {"role": "assistant", "content": turn_recap(decision, observation, slot)}
+                )
+                if len(history) > 2 * HISTORY_TURNS:
+                    history[:] = history[:2] + history[-2 * (HISTORY_TURNS - 1) :]
 
-            payload: dict[str, Any] = {"turn": observation["turn"], "paint": decision["paint"]}
-            if decision["message"]:
-                payload["message"] = decision["message"]
-            await websocket.send(json.dumps(payload))
+                payload: dict[str, Any] = {
+                    "turn": observation["turn"],
+                    "paint": decision["paint"],
+                }
+                if decision["message"]:
+                    payload["message"] = decision["message"]
+                await websocket.send(json.dumps(payload))
+        finally:
+            receiver.cancel()
+        print(f"[seat {slot}] episode finished", flush=True)
 
 
 asyncio.run(main())
