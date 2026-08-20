@@ -371,8 +371,15 @@ def call_model(messages: list[dict[str, Any]], timeout: float, image: bytes | No
             f"{base}/chat/completions",
             {
                 "model": model,
-                "max_tokens": 640,
+                # Reasoning models spend this budget thinking before they emit
+                # the tool call, so a tight cap silently costs the turn.
+                "max_tokens": int(os.environ.get("MODEL_MAX_TOKENS", "1600")),
                 "temperature": 0.7,
+                **(
+                    {"reasoning": {"effort": os.environ["REASONING_EFFORT"]}}
+                    if os.environ.get("REASONING_EFFORT")
+                    else {}
+                ),
                 "messages": turn_messages[:-1] + [{"role": "user", "content": content}],
                 "tools": OPENAI_TOOLS,
                 "tool_choice": {"type": "function", "function": {"name": "paint_pixel"}},
