@@ -209,6 +209,11 @@ def index_page() -> str:
 
 
 class RunsHandler(SimpleHTTPRequestHandler):
+    def end_headers(self) -> None:
+        # Pages are re-rendered in place; a browser must not keep an old copy.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
         if self.path in ("/", "/index.html"):
             body = index_page().encode()

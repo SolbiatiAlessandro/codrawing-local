@@ -4,8 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>co/place</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
   <style>
+    /* The arcade face. Loaded from inside the stylesheet, not a <link>,
+       because the standalone match page keeps only this <style> block. */
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     /* The "stream" match view (design canvas: Codrawing Arena Directions,
        S1 · Stream). The paper arcade sits inside a dark video player: title,
        HP bars, the board as big as the player allows, and a row of player
@@ -24,20 +26,22 @@
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { margin: 0; background: #FFFFFF; color: var(--ink); font-family: var(--sf); overflow: hidden; -webkit-font-smoothing: antialiased; }
+    body { margin: 0; background: #FFFFFF; color: var(--ink); font-family: var(--sf); overflow: hidden; -webkit-font-smoothing: antialiased; display: flex; justify-content: center; align-items: flex-start; }
     a { color: var(--amb); }
-    main { height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) var(--chat-w); overflow: hidden; }
+    /* The design is a 1728x1117 stage; the page IS that stage, zoomed to fit
+       the window, so every size inside matches the artboard on any screen. */
+    main { width: 1728px; height: 1117px; flex: none; display: grid; grid-template-columns: minmax(0, 1fr) var(--chat-w); overflow: hidden; }
     .left { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #FFFFFF; }
 
     /* ---------- player ---------- */
-    .player { flex: 1; min-height: 0; position: relative; background: var(--video); overflow: hidden; }
+    .player { height: 947px; flex: none; position: relative; background: var(--video); overflow: hidden; }
     .arcade {
       position: absolute; left: 0; right: 0; top: 0; bottom: 46px;
       background: var(--paper); background-image: radial-gradient(#E6DFD0 1px, transparent 1px); background-size: 14px 14px;
       display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 14px; overflow: hidden;
     }
     .title { font-family: var(--p8); font-size: 15px; color: var(--amb); text-align: center; line-height: 1.6; flex: none; padding: 0 120px; }
-    .row { width: min(1254px, calc(100% - 80px)); flex: none; }
+    .row { width: 1254px; flex: none; }
     .bars { display: grid; grid-template-columns: 1fr 140px 1fr; gap: 28px; align-items: center; }
     .bars.solo { grid-template-columns: 1fr 140px; }
     .hp { min-width: 0; }
@@ -61,7 +65,7 @@
     .round .n { font-family: var(--p8); font-size: 26px; color: var(--red); }
     .round .cap { font-family: var(--p8); font-size: 7px; color: var(--red); white-space: nowrap; }
 
-    .stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 40px; }
+    .stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 60px; }
     .frame { position: relative; }
     .plate { position: relative; border: 5px solid var(--ink); padding: 10px; background: #FFFFFF; box-shadow: 0 18px 50px rgba(31,27,20,.18); }
     #board { display: block; image-rendering: pixelated; }
@@ -98,7 +102,7 @@
     .chrome input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #FFFFFF; border: 0; box-shadow: 0 0 0 2px var(--amb); }
 
     /* ---------- score panel ---------- */
-    .scorepanel { margin: 12px 20px; border: 1px solid var(--line); border-radius: 6px; background: #FFFFFF; padding: 14px 20px 12px; display: flex; flex-direction: column; gap: 8px; flex: none; }
+    .scorepanel { margin: 12px 20px; border: 1px solid var(--line); border-radius: 6px; background: #FFFFFF; padding: 14px 20px 12px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
     .sp-head { display: flex; justify-content: space-between; align-items: baseline; }
     .sp-title { font-family: var(--sf); font-size: 16px; font-weight: 700; color: var(--ink); }
     .sp-legend { font-family: var(--p8); font-size: 7px; color: var(--muted); }
@@ -151,8 +155,6 @@
     .hp .meter.chip { animation: flashred .6s ease both; }
     @media (prefers-reduced-motion: reduce) { .stamp, .hp .num, .hp .meter { animation: none !important; } }
 
-    @media (max-width: 1500px) { :root { --chat-w: 300px; } .cam { width: 92px; } .camgroup { height: 68px; } .cam .face svg { width: 26px; height: 26px; } .title { font-size: 12px; } }
-    @media (max-width: 1150px) { main { grid-template-columns: minmax(0, 1fr); } .chats { display: none; } .cams { display: none; } .scorer { min-width: 0; } .scorer .rest { display: none; } }
   </style>
 </head>
 <body>
@@ -230,6 +232,15 @@
   const fx = document.querySelector('#fx');
   const fxCtx = fx.getContext('2d');
   const MOTION = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const STAGE = { w: 1728, h: 1117 };
+  let ZOOM = 1;
+  function fitStage() {
+    ZOOM = Math.max(0.2, Math.min(window.innerWidth / STAGE.w, window.innerHeight / STAGE.h));
+    document.querySelector('#main').style.zoom = ZOOM;
+  }
+  // Canvas backing stores account for the zoom so pixels stay crisp.
+  function dpr() { return (window.devicePixelRatio || 1) * ZOOM; }
+  fitStage();
   const spark = document.querySelector('#spark');
   const status = document.querySelector('#status');
   const timeline = document.querySelector('#timeline');
@@ -417,7 +428,7 @@
     if (!teams.length) return 'CAN THEY DRAW A ' + String(frame.target || '').toUpperCase() + '?';
     return teams[0].target === teams[1].target
       ? 'WHICH TEAM CAN DRAW THE BEST ' + teams[0].target.toUpperCase() + '?'
-      : teams[0].target.toUpperCase() + ' VS ' + teams[1].target.toUpperCase();
+      : 'WHICH TEAM CAN DRAW THE BEST? ' + teams[0].target.toUpperCase() + ' VS ' + teams[1].target.toUpperCase();
   }
   function renderBand(frame, previous, animate) {
     const teams = frame.teams || [];
@@ -538,7 +549,7 @@
   }
   function fxTick(now) {
     fxRaf = 0;
-    const scale = window.devicePixelRatio || 1;
+    const scale = dpr();
     fxCtx.setTransform(scale, 0, 0, scale, 0, 0);
     fxCtx.clearRect(0, 0, fxSize.w, fxSize.h);
     const cell = fxCell;
@@ -579,7 +590,7 @@
     const avail = { w: stage.clientWidth - 80 - 30, h: stage.clientHeight - 30 };
     const cell = Math.max(4, Math.floor(Math.min(avail.w / frame.width, avail.h / frame.height)));
     const size = { w: frame.width * cell + 1, h: frame.height * cell + 1 };
-    const scale = window.devicePixelRatio || 1;
+    const scale = dpr();
     board.width = size.w * scale; board.height = size.h * scale;
     board.style.width = size.w + 'px'; board.style.height = size.h + 'px';
     fx.width = size.w * scale; fx.height = size.h * scale;
@@ -694,7 +705,7 @@
     return out;
   }
   function drawSpark(series, currentIndex, colors, raids, total) {
-    const scale = window.devicePixelRatio || 1;
+    const scale = dpr();
     const w = spark.clientWidth || 400, h = Math.max(40, spark.clientHeight || 72);
     spark.width = w * scale; spark.height = h * scale;
     const ctx = spark.getContext('2d');
@@ -874,11 +885,12 @@
     setPlayIcon();
   });
   document.querySelector('#fullscreen').addEventListener('click', () => {
-    const player = document.querySelector('#player');
+    const root = document.documentElement;
     if (document.fullscreenElement) document.exitFullscreen();
-    else if (player.requestFullscreen) player.requestFullscreen();
+    else if (root.requestFullscreen) root.requestFullscreen();
   });
   window.addEventListener('resize', () => {
+    fitStage();
     if (frames.length) showReplayFrame(frameIndex);
     else if (previousLiveFrame) showFrame(previousLiveFrame, null, liveScores, undefined, liveFrames);
   });
