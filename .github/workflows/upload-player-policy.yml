@@ -77,7 +77,10 @@ jobs:
           docker build --target "${{ inputs.target }}" -t coplace-versus-player:ci .
           echo "image size:"
           docker image inspect coplace-versus-player:ci --format '{{.Size}}' \
-            | awk '{printf "  %.0f MiB (player cap is 512 MiB)\n", $1/1048576}' 
+            | awk '{printf "  %.0f MiB (player cap is 512 MiB)\n", $1/1048576}'
+          echo "layers, largest first:"
+          docker history coplace-versus-player:ci --format '{{.Size}}\t{{.CreatedBy}}' \
+            | head -20 
 
       - name: Upload the policy
         env:
