@@ -86,6 +86,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-pip \
  && rm -rf /var/lib/apt/lists/* \
  && ln -sf /usr/bin/python3 /usr/local/bin/python \
+ && ln -sf /usr/bin/python3 /usr/local/bin/python \
  && pip3 install --break-system-packages --no-cache-dir \
       websockets==15.0.1 "claude-agent-sdk>=0.2" \
  && find /usr/lib/python3* -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
