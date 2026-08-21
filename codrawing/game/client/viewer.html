@@ -40,7 +40,9 @@
       background: var(--paper); background-image: radial-gradient(#E6DFD0 1px, transparent 1px); background-size: 14px 14px;
       display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 14px; overflow: hidden;
     }
-    .title { font-family: var(--p8); font-size: 15px; color: var(--amb); text-align: center; line-height: 1.6; flex: none; padding: 0 120px; }
+    .title { font-family: var(--p8); font-size: 15px; color: var(--ink); text-align: center; line-height: 1.75; flex: none; border: 3px solid var(--ink); padding: 12px 40px 10px; margin: 2px 90px 8px; }
+    /* the target is the only thing in the plate that carries colour */
+    .title .t { color: var(--amb); }
     .row { width: 1254px; flex: none; }
     .bars { display: grid; grid-template-columns: 1fr 140px 1fr; gap: 28px; align-items: center; }
     .bars.solo { grid-template-columns: 1fr 140px; }
@@ -424,11 +426,16 @@
 
   /* ---------- band, turn chip ---------- */
   function titleFor(frame) {
+    // The rule first, then the question; one type size throughout, and the
+    // target is the only word that takes colour.
+    const RULE = 'EVERY AGENT PLACES ONE PIXEL PER TURN.<br>';
+    const ASK = 'WHICH TEAM DRAWS THE BEST ';
     const teams = frame.teams || [];
-    if (!teams.length) return 'CAN THEY DRAW A ' + String(frame.target || '').toUpperCase() + '?';
+    const t = value => '<span class="t">' + String(value || '').toUpperCase() + '</span>';
+    if (!teams.length) return RULE + 'CAN THEY DRAW A ' + t(frame.target) + '?';
     return teams[0].target === teams[1].target
-      ? 'WHICH TEAM CAN DRAW THE BEST ' + teams[0].target.toUpperCase() + '?'
-      : 'WHICH TEAM CAN DRAW THE BEST? ' + teams[0].target.toUpperCase() + ' VS ' + teams[1].target.toUpperCase();
+      ? RULE + ASK + t(teams[0].target) + '?'
+      : RULE + ASK + t(teams[0].target) + ' VS ' + t(teams[1].target) + '?';
   }
   function renderBand(frame, previous, animate) {
     const teams = frame.teams || [];
@@ -436,7 +443,7 @@
     const last = frame.turn >= frame.max_turns;
     document.querySelector('#round-cap').textContent = last ? 'FINAL ROUND' : 'ROUND ' + frame.turn + ' / ' + frame.max_turns;
     document.querySelector('#turnchip').textContent = 'TURN ' + frame.turn + ' / ' + frame.max_turns;
-    document.querySelector('#title').textContent = titleFor(frame);
+    document.querySelector('#title').innerHTML = titleFor(frame);
     if (!teams.length) {
       const fb = frame.image_model_feedback || {};
       const prev = previous && previous.image_model_feedback ? previous.image_model_feedback.target_score : null;
