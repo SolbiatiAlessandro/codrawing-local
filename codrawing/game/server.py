@@ -105,6 +105,7 @@ class GameRuntime:
         self.last_resolution: dict[str, Any] = {
             "accepted_slots": [],
             "collision_slots": [],
+            "collision_pixels": [],
         }
         self.action_event = asyncio.Event()
         self.started = False
@@ -407,6 +408,7 @@ async def _play_game() -> None:
         snapshot = runtime.snapshot(turn_messages=resolution["messages"])
         snapshot["accepted_slots"] = resolution["accepted_slots"]
         snapshot["collision_slots"] = resolution["collision_slots"]
+        snapshot["collision_pixels"] = resolution.get("collision_pixels", [])
         runtime.frames.append(snapshot)
         await _broadcast_globals(snapshot)
         # Checkpoint: a long episode that is killed part-way still leaves a

@@ -688,6 +688,78 @@
           }
         ]
       }
+    },
+    {
+      "id": "mirror",
+      "name": "Mirror",
+      "description": "Both teams draw the SAME target (pineapple). One figure, two attempts side by side - the cleanest read on which team coordinates better.",
+      "game_config": {
+        "width": 32,
+        "height": 24,
+        "max_turns": 50,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {
+            "name": "Team A",
+            "target": "pineapple",
+            "slots": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "pineapple",
+            "slots": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "region": {
+              "x": 16,
+              "y": 0,
+              "width": 16,
+              "height": 24
+            }
+          }
+        ],
+        "players": [
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "A4"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          },
+          {
+            "name": "B4"
+          }
+        ]
+      }
     }
   ],
   "certification": {

@@ -38,9 +38,9 @@
     .arcade {
       position: absolute; left: 0; right: 0; top: 0; bottom: 46px;
       background: var(--paper); background-image: radial-gradient(#E6DFD0 1px, transparent 1px); background-size: 14px 14px;
-      display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 14px; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 0 8px; overflow: hidden;
     }
-    .title { font-family: var(--p8); font-size: 15px; color: var(--ink); text-align: center; line-height: 1.75; flex: none; border: 3px solid var(--ink); padding: 12px 40px 10px; margin: 2px 90px 8px; }
+    .title { font-family: var(--p8); font-size: 15px; color: var(--ink); text-align: center; line-height: 1.75; flex: none; border: 3px solid var(--ink); padding: 8px 28px 6px; margin: 0 60px 4px; }
     /* the target is the only thing in the plate that carries colour */
     .title .t { color: var(--amb); }
     .row { width: 1254px; flex: none; }
@@ -67,7 +67,7 @@
     .round .n { font-family: var(--p8); font-size: 26px; color: var(--red); }
     .round .cap { font-family: var(--p8); font-size: 7px; color: var(--red); white-space: nowrap; }
 
-    .stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 60px; }
+    .stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0 16px; }
     .frame { position: relative; }
     .plate { position: relative; border: 5px solid var(--ink); padding: 10px; background: #FFFFFF; box-shadow: 0 18px 50px rgba(31,27,20,.18); }
     #board { display: block; image-rendering: pixelated; }
@@ -76,6 +76,12 @@
     .stamp.raid { left: 28px; top: 20px; color: var(--red); transform: rotate(-6deg); }
     .stamp.win { left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 26px; background: rgba(251,248,241,.92); border: 4px solid var(--ink); padding: 14px 22px; box-shadow: 6px 6px 0 var(--rule); text-shadow: none; }
     .stamp.coord { right: 16px; bottom: 16px; font-size: 7px; color: var(--muted); background: rgba(255,255,255,.85); padding: 4px 6px; text-shadow: none; }
+    .stamp.clash { right: 28px; top: 20px; color: var(--amb); transform: rotate(4deg); }
+    /* running coordination tally: one ✕ per write lost to a same-pixel collision */
+    .hp .coordchip { font-family: var(--p8); font-size: 7px; color: var(--muted); white-space: nowrap; letter-spacing: .08em; }
+    .hp .coordchip.clean { color: var(--green); }
+    .hp .coordchip.some { color: var(--amb); }
+    .hp .coordchip.messy { color: var(--red); }
 
     /* player cams */
     .cams { display: flex; justify-content: space-between; gap: 8px; }
@@ -152,6 +158,7 @@
     @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
     @keyframes flashred { 0% { background: #FBE3E8; } 100% { background: #FFFFFF; } }
     .stamp.raid.slam { animation: slam .45s cubic-bezier(.2,.9,.3,1.3) both; }
+    .stamp.clash.slam { animation: slam .45s cubic-bezier(.2,.9,.3,1.3) both; }
     .stamp.win.slam { animation: slamwin .6s cubic-bezier(.2,.9,.3,1.3) both; }
     .hp .num.chip { display: inline-block; animation: shake .4s ease both; color: var(--red); }
     .hp .meter.chip { animation: flashred .6s ease both; }
@@ -167,13 +174,13 @@
         <div class="title" id="title">&nbsp;</div>
         <div class="row bars" id="bars">
           <div class="hp a" id="hp-a">
-            <div class="line"><span class="lbl" id="lbl-a">1P</span><span class="num" id="num-a">&mdash;</span></div>
+            <div class="line"><span class="lbl" id="lbl-a">1P</span><span class="coordchip" id="coord-a"></span><span class="num" id="num-a">&mdash;</span></div>
             <div class="meter"><div class="ghost" id="ghost-a" style="width:0"></div><div class="fill" id="fill-a" style="width:0"></div></div>
             <div class="note" id="note-a">&nbsp;</div>
           </div>
           <div class="round"><div class="n" id="turn">0</div><div class="cap" id="round-cap">ROUND 0 / 0</div></div>
           <div class="hp b" id="hp-b">
-            <div class="line"><span class="lbl" id="lbl-b">2P</span><span class="num" id="num-b">&mdash;</span></div>
+            <div class="line"><span class="lbl" id="lbl-b">2P</span><span class="coordchip" id="coord-b"></span><span class="num" id="num-b">&mdash;</span></div>
             <div class="meter"><div class="ghost" id="ghost-b" style="width:0"></div><div class="fill" id="fill-b" style="width:0"></div></div>
             <div class="note" id="note-b">&nbsp;</div>
           </div>
@@ -182,6 +189,7 @@
           <div class="frame">
             <div class="plate"><canvas id="board"></canvas><canvas id="fx"></canvas></div>
             <div class="stamp raid" id="stamp-raid" hidden></div>
+            <div class="stamp clash" id="stamp-clash" hidden></div>
             <div class="stamp win" id="stamp-win" hidden></div>
           </div>
         </div>
@@ -428,14 +436,13 @@
   function titleFor(frame) {
     // The rule first, then the question; one type size throughout, and the
     // target is the only word that takes colour.
-    const RULE = 'EVERY AGENT PLACES ONE PIXEL PER TURN.<br>';
+    const RULE = 'EVERY AGENT PLACES ONE PIXEL PER TURN. ';
     const ASK = 'WHICH TEAM DRAWS THE BEST ';
     const teams = frame.teams || [];
     const t = value => '<span class="t">' + String(value || '').toUpperCase() + '</span>';
     if (!teams.length) return RULE + 'CAN THEY DRAW A ' + t(frame.target) + '?';
-    return teams[0].target === teams[1].target
-      ? RULE + ASK + t(teams[0].target) + '?'
-      : RULE + ASK + t(teams[0].target) + ' VS ' + t(teams[1].target) + '?';
+    // One drawing per match: the ask names a single target, never "X VS Y".
+    return RULE + ASK + t(teams[0].target) + '?';
   }
   function renderBand(frame, previous, animate) {
     const teams = frame.teams || [];
@@ -541,6 +548,18 @@
   function ring(x, y, color) {
     particles.push({ kind: 'ring', born: performance.now(), life: 520, x: x + 0.5, y: y + 0.5, s0: 1.1, grow: 1.4, color: color, alpha: 0.9, width: 0.14 });
   }
+  // Two seats named the same square: a bump — double shockwave, a lingering ✕
+  // where the writes died, and a spray of each colliding seat's colour.
+  function clash(x, y, slots) {
+    const now = performance.now();
+    particles.push({ kind: 'ring', born: now, life: 420, x: x + 0.5, y: y + 0.5, s0: 1.1, grow: 2.4, color: '#E08A12', alpha: 0.95, width: 0.18 });
+    particles.push({ kind: 'ring', born: now + 90, life: 420, x: x + 0.5, y: y + 0.5, s0: 0.8, grow: 1.6, color: '#E11D48', alpha: 0.9, width: 0.14 });
+    particles.push({ kind: 'cross', born: now, life: 900, x: x + 0.5, y: y + 0.5, s0: 1.4, grow: 0.4, color: '#1F1B14', alpha: 0.95, width: 0.2 });
+    for (const s of slots || []) {
+      puff(x, y, { count: 6, life: [300, 560], drift: 2.4, rise: [-2.4, 1.2], size: [0.18, 0.32], grow: -0.1,
+                   colors: [SEAT_COLORS[s % SEAT_COLORS.length], '#FFFFFF'], alpha: 0.95 });
+    }
+  }
   function spawnEffects(frame, previous, changed) {
     if (!MOTION || !previous) return;
     for (const i of changed) {
@@ -552,6 +571,7 @@
       else if (raid) sparks(x, y, '#E11D48');
       else ring(x, y, seat);
     }
+    for (const c of frame.collision_pixels || []) clash(c.x, c.y, c.slots);
     if (!fxRaf) fxRaf = requestAnimationFrame(fxTick);
   }
   function fxTick(now) {
@@ -575,6 +595,13 @@
       if (p.kind === 'ring') {
         fxCtx.strokeStyle = p.color; fxCtx.lineWidth = Math.max(1.5, p.width * cell);
         fxCtx.strokeRect(Math.round(px - size / 2) + 0.5, Math.round(py - size / 2) + 0.5, Math.round(size), Math.round(size));
+      } else if (p.kind === 'cross') {
+        fxCtx.strokeStyle = p.color; fxCtx.lineWidth = Math.max(1.5, p.width * cell);
+        const h = size / 2;
+        fxCtx.beginPath();
+        fxCtx.moveTo(px - h, py - h); fxCtx.lineTo(px + h, py + h);
+        fxCtx.moveTo(px + h, py - h); fxCtx.lineTo(px - h, py + h);
+        fxCtx.stroke();
       } else {
         fxCtx.fillStyle = p.color;
         const q = Math.max(1, cell / 4);
@@ -594,7 +621,7 @@
   /* ---------- board ---------- */
   function drawBoard(frame, previous) {
     const stage = document.querySelector('#stage');
-    const avail = { w: stage.clientWidth - 80 - 30, h: stage.clientHeight - 30 };
+    const avail = { w: stage.clientWidth - 40, h: stage.clientHeight - 12 };
     const cell = Math.max(4, Math.floor(Math.min(avail.w / frame.width, avail.h / frame.height)));
     const size = { w: frame.width * cell + 1, h: frame.height * cell + 1 };
     const scale = dpr();
@@ -676,6 +703,13 @@
     raid.hidden = !raids;
     raid.textContent = 'RAID ×' + raids;
     if (raids && animate) retrigger(raid, 'slam');
+    const dropped = (frame.collision_slots || []);
+    const clashEl = document.querySelector('#stamp-clash');
+    clashEl.hidden = !dropped.length;
+    clashEl.textContent = dropped.length > 3
+      ? '✕ COLLISION · ' + dropped.length + ' WRITES DROPPED'
+      : '✕ COLLISION ' + dropped.map(s => 'A' + s).join('+');
+    if (dropped.length && animate) retrigger(clashEl, 'slam');
     const teams = frame.teams || [];
     const win = document.querySelector('#stamp-win');
     const feedback = frame.team_feedback || [];
@@ -760,9 +794,33 @@
   }
 
   /* ---------- frame ---------- */
+  // Cumulative writes lost to same-pixel collisions, per side — the running
+  // coordination scoreboard. One ✕ per dropped write; green means clean.
+  function renderCoordination(list, upto, frame) {
+    const teams = frame.teams || [];
+    const totals = [0, 0];
+    if (upto === undefined) upto = list.length - 1;  // live view: everything so far
+    for (let f = 0; f <= upto && f < list.length; f++) {
+      for (const s of list[f].collision_slots || []) {
+        const k = teams.length ? teamOfSlot(list[f], s) : 0;
+        if (k >= 0) totals[k] += 1;
+      }
+    }
+    ['a', 'b'].forEach((side, k) => {
+      const el = document.querySelector('#coord-' + side);
+      if (!el) return;
+      if (k === 1 && !teams.length) { el.textContent = ''; return; }
+      const n = totals[k];
+      const marks = '✕'.repeat(Math.min(n, 8));
+      el.className = 'coordchip ' + (n === 0 ? 'clean' : n <= 5 ? 'some' : 'messy');
+      el.title = 'writes lost to same-pixel collisions so far — fewer means better coordination';
+      el.textContent = n === 0 ? 'NO COLLISIONS' : marks + ' ' + n + ' DROPPED';
+    });
+  }
   function showFrame(frame, previous, series, scoreIndex, list, animate) {
     layoutSeats(frame);
     renderBand(frame, previous, animate);
+    renderCoordination(list || [], scoreIndex, frame);
     const changed = drawBoard(frame, previous);
     if (animate) spawnEffects(frame, previous, changed);
     renderStamps(frame, changed, animate);

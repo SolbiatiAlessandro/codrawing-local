@@ -264,6 +264,11 @@ class PixelArtEngine:
             "turn": self.turn,
             "accepted_slots": accepted,
             "collision_slots": collided,
+            "collision_pixels": [
+                {"x": x, "y": y, "slots": slots}
+                for (x, y), slots in by_pixel.items()
+                if len(slots) > 1
+            ],
             "messages": turn_messages,
         }
 
