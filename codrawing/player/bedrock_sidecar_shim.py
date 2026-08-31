@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -27,18 +28,125 @@ def _sidecar_url() -> str:
     return f"{base}/model/{model}/invoke"
 
 
-# The Bedrock InvokeModel request schema is a strict subset of the Anthropic
-# API's: newer beta fields the CLI sends (context_management, service tiers,
-# ...) are rejected with 400s, so only known-good fields are forwarded.
+# The sidecar validates the InvokeModel body strictly at EVERY level, not just
+# the top: unknown fields nested inside system blocks, content blocks, tools,
+# or the thinking config are rejected the same way top-level extras are
+# ("request body does not match the supported Bedrock shape"). So the whole
+# payload is rebuilt from per-shape whitelists of the documented
+# anthropic_version=bedrock-2023-05-31 schema, and anything the CLI adds in a
+# future version falls away instead of 400ing every turn.
 _BEDROCK_FIELDS = frozenset({
     "max_tokens", "messages", "system", "tools", "tool_choice",
     "temperature", "top_p", "top_k", "stop_sequences", "thinking",
 })
+_CACHE_CONTROL_FIELDS = frozenset({"type"})
+_BLOCK_FIELDS = {
+    "text": frozenset({"type", "text", "cache_control"}),
+    "image": frozenset({"type", "source", "cache_control"}),
+    "tool_use": frozenset({"type", "id", "name", "input", "cache_control"}),
+    "tool_result": frozenset({"type", "tool_use_id", "content", "is_error", "cache_control"}),
+    "thinking": frozenset({"type", "thinking", "signature"}),
+    "redacted_thinking": frozenset({"type", "data"}),
+}
+_IMAGE_SOURCE_FIELDS = frozenset({"type", "media_type", "data"})
+_TOOL_FIELDS = frozenset({"name", "description", "input_schema"})
+_TOOL_CHOICE_FIELDS = frozenset({"type", "name", "disable_parallel_tool_use"})
+
+
+def _clean_block(block: object) -> dict | None:
+    """One content block, reduced to its documented fields; unknown kinds drop."""
+    if not isinstance(block, dict):
+        return None
+    kind = block.get("type")
+    fields = _BLOCK_FIELDS.get(kind)
+    if fields is None:
+        return None
+    clean = {k: v for k, v in block.items() if k in fields}
+    if isinstance(clean.get("cache_control"), dict):
+        clean["cache_control"] = {
+            k: v for k, v in clean["cache_control"].items() if k in _CACHE_CONTROL_FIELDS
+        }
+    if kind == "image" and isinstance(clean.get("source"), dict):
+        clean["source"] = {k: v for k, v in clean["source"].items() if k in _IMAGE_SOURCE_FIELDS}
+    if kind == "tool_result":
+        clean["content"] = _clean_content(block.get("content"))
+    return clean
+
+
+def _clean_content(content: object) -> object:
+    """Message (or tool_result) content: a plain string, or a block list."""
+    if not isinstance(content, list):
+        return content
+    blocks = [clean for block in content if (clean := _clean_block(block)) is not None]
+    # A message whose blocks all fell away must not become empty content —
+    # the sidecar rejects that too — so leave a placeholder in the transcript.
+    return blocks or [{"type": "text", "text": "(elided)"}]
+
+
+def _clean_thinking(thinking: object) -> dict | None:
+    """The sidecar knows only the documented enabled/disabled shapes. The CLI
+    sends {"type": "adaptive", "display": ...}, which is first-party-only
+    surface; drop it and let the model run at its Bedrock default."""
+    if not isinstance(thinking, dict):
+        return None
+    if thinking.get("type") == "enabled" and isinstance(thinking.get("budget_tokens"), int):
+        return {"type": "enabled", "budget_tokens": thinking["budget_tokens"]}
+    if thinking.get("type") == "disabled":
+        return {"type": "disabled"}
+    return None
+
+
+def _clean_payload(body: dict) -> dict:
+    payload = {k: v for k, v in body.items() if k in _BEDROCK_FIELDS}
+    if isinstance(payload.get("system"), list):
+        payload["system"] = _clean_content(payload["system"])
+    if isinstance(payload.get("messages"), list):
+        # The CLI sends mid-conversation {"role": "system"} messages (the
+        # AGENT_MODEL alias advertises that capability); Bedrock knows only
+        # user/assistant, so anything else is delivered as a user message.
+        payload["messages"] = [
+            {
+                "role": m.get("role") if m.get("role") in ("user", "assistant") else "user",
+                "content": _clean_content(m.get("content")),
+            }
+            for m in payload["messages"]
+            if isinstance(m, dict)
+        ]
+    if isinstance(payload.get("tools"), list):
+        # input_schema is free-form JSON Schema and passes through untouched.
+        payload["tools"] = [
+            {k: v for k, v in tool.items() if k in _TOOL_FIELDS}
+            for tool in payload["tools"]
+            if isinstance(tool, dict)
+        ]
+    if isinstance(payload.get("tool_choice"), dict):
+        payload["tool_choice"] = {
+            k: v for k, v in payload["tool_choice"].items() if k in _TOOL_CHOICE_FIELDS
+        }
+    thinking = _clean_thinking(payload.pop("thinking", None))
+    if thinking is not None:
+        payload["thinking"] = thinking
+    payload["anthropic_version"] = "bedrock-2023-05-31"
+    return payload
+
+
+def _key_signature(node: object, prefix: str = "") -> set[str]:
+    """Every nested dict-key path in a payload — keys only, no values — so a
+    hosted 400 names the offending shape straight from the policy log."""
+    paths: set[str] = set()
+    if isinstance(node, dict):
+        for key, value in node.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            paths.add(path)
+            if key != "input_schema":  # tool schemas are free-form noise
+                paths.update(_key_signature(value, path))
+    elif isinstance(node, list):
+        paths.update(path for item in node for path in _key_signature(item, prefix + "[]"))
+    return paths
 
 
 def _invoke(body: dict) -> tuple[int, dict]:
-    payload = {k: v for k, v in body.items() if k in _BEDROCK_FIELDS}
-    payload["anthropic_version"] = "bedrock-2023-05-31"
+    payload = _clean_payload(body)
     request = urllib.request.Request(
         _sidecar_url(),
         data=json.dumps(payload).encode(),
@@ -50,6 +158,13 @@ def _invoke(body: dict) -> tuple[int, dict]:
             return response.status, json.loads(response.read())
     except urllib.error.HTTPError as error:
         detail = error.read().decode(errors="replace")
+        if error.code == 400:
+            print(
+                f"sidecar-shim: sidecar 400 ({detail[:200]}); outbound keys: "
+                + " ".join(sorted(_key_signature(payload))),
+                file=sys.stderr,
+                flush=True,
+            )
         try:
             return error.code, json.loads(detail)
         except json.JSONDecodeError:
