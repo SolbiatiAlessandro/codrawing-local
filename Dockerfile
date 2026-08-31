@@ -102,4 +102,11 @@ ENV PYTHONPATH=/app \
 WORKDIR /app
 COPY codrawing /app/codrawing
 
+# Claude Code refuses permission-bypass mode as root, so seats run as the
+# base image's non-root user.
+RUN mkdir -p /tmp/claude /tmp/agent-workspace \
+ && chown -R node:node /tmp/claude /tmp/agent-workspace
+USER node
+ENV HOME=/home/node
+
 CMD ["python3", "-m", "codrawing.player.agent_player"]
