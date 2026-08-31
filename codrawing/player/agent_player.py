@@ -152,6 +152,21 @@ def claude_environment() -> None:
     env.setdefault("DISABLE_TELEMETRY", "1")
     env.setdefault("DISABLE_AUTOUPDATER", "1")
     env.setdefault("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
+    # Hosted Bedrock sidecar: its gateway rejects the streaming operation the
+    # claude CLI insists on, so a localhost shim bridges the CLI's streaming
+    # Anthropic API to the sidecar's non-streaming InvokeModel. The CLI then
+    # runs in plain Anthropic mode against the shim; the key is a placeholder
+    # the shim never reads (the sidecar re-signs with the runner identity).
+    if env.get("AWS_ENDPOINT_URL_BEDROCK_RUNTIME") and env.get("BEDROCK_MODEL"):
+        from codrawing.player import bedrock_sidecar_shim
+
+        env.pop("CLAUDE_CODE_USE_BEDROCK", None)
+        env["ANTHROPIC_BASE_URL"] = bedrock_sidecar_shim.start()
+        env.setdefault("ANTHROPIC_API_KEY", "sidecar-shim")
+        # The CLI validates model names against its own list before calling out,
+        # and rejects Bedrock-style ids; the shim discards the request's model
+        # and always invokes BEDROCK_MODEL, so any known alias satisfies it.
+        env["AGENT_MODEL"] = "claude-sonnet-5"
 
 
 def seat_color(slot: int) -> str:
