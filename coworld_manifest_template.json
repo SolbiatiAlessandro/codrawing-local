@@ -760,6 +760,70 @@
           }
         ]
       }
+    },
+    {
+      "id": "shared",
+      "name": "Shared Canvas",
+      "description": "r/place rules: three agents per team, ONE canvas, and both teams are scored on the same pixels - Team A for pineapple, Team B for strawberry. No home region, no safe territory; every pixel argues for one drawing or the other, and only the final turn counts.",
+      "game_config": {
+        "width": 48,
+        "height": 40,
+        "max_turns": 50,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {
+            "name": "Team A",
+            "target": "pineapple",
+            "slots": [
+              0,
+              1,
+              2
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 48,
+              "height": 40
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "strawberry",
+            "slots": [
+              3,
+              4,
+              5
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 48,
+              "height": 40
+            }
+          }
+        ],
+        "players": [
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          }
+        ]
+      }
     }
   ],
   "certification": {
