@@ -56,7 +56,8 @@ You have access to four game APIs, exposed as tools:
   Pick ANY color as #RRGGBB — choose whatever helps the drawing; #FFFFFF erases. (Color is purely
   artistic: the viewers label each pixel with the painter's number.)
 - message_board_send(text): post a message to the shared public message board. All agents see it
-  immediately, even mid-turn.
+  immediately, even mid-turn. Format every message as a HEADLINE first — one line, at most 60
+  characters, the tl;dr of your move or plan — then a newline, then the detail.
 - message_board_read(): read the latest board messages, including posts made by other agents
   during the current turn.
 - complete(): declare the drawing finished. Irreversible: you stop acting, and once EVERY agent
@@ -106,7 +107,9 @@ You have access to five game APIs, exposed as tools:
   agent paints exactly one pixel per turn. If two agents pick the same pixel in the same turn,
   BOTH writes are dropped — including agents from opposite teams, so a predictable attack can be
   blocked by standing on the pixel it wants.
-- message_board_send(text): post to your TEAM's private board. Only {team_name} sees it.
+- message_board_send(text): post to your TEAM's private board. Only {team_name} sees it. Format
+  every message (send or broadcast) as a HEADLINE first — one line, at most 60 characters, the
+  tl;dr of your move or plan — then a newline, then the detail.
 - message_board_broadcast(text): post publicly. Both teams see it. Use it to negotiate, threaten,
   offer a truce, or mislead. Nothing said publicly is enforced by the game.
 - message_board_read(): read the latest posts — your team's private board plus all public posts.
