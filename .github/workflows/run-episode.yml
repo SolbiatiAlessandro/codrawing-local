@@ -1,0 +1,99 @@
+# Creates a hosted episode on an uploaded coworld and polls it to completion.
+# Runs entirely in CI so experiments keep going with every laptop closed.
+# Needs the SOFTMAX_CREDENTIALS repo secret (same as upload-coworld).
+
+name: run-episode
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_run_id:
+        description: "upload-coworld run id to take the coworld id from (blank = use coworld_id)"
+        required: false
+        default: ""
+      coworld_id:
+        description: "Coworld id (cow_...) if not using upload_run_id"
+        required: false
+        default: ""
+      variant:
+        description: "Variant id"
+        required: true
+        default: "flags"
+      policy_ref:
+        description: "Policy ref for every seat"
+        required: true
+        default: "agent-bedrock-sonnet46:v9"
+      seats:
+        description: "Number of seats"
+        required: true
+        default: "6"
+      notes:
+        description: "Episode notes"
+        required: false
+        default: "CI-launched episode"
+
+jobs:
+  episode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install coworld CLI
+        run: uv tool install git+https://github.com/Metta-AI/coworld.git
+
+      - name: Write Softmax credentials
+        env:
+          SOFTMAX_CREDENTIALS: ${{ secrets.SOFTMAX_CREDENTIALS }}
+        run: |
+          test -n "$SOFTMAX_CREDENTIALS" || { echo "SOFTMAX_CREDENTIALS secret is empty" >&2; exit 1; }
+          mkdir -p ~/.softmax
+          printf '%s' "$SOFTMAX_CREDENTIALS" > ~/.softmax/credentials.yaml
+          chmod 600 ~/.softmax/credentials.yaml
+
+      - name: Resolve coworld id
+        id: cow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cow="${{ inputs.coworld_id }}"
+          run_id="${{ inputs.upload_run_id }}"
+          if [ -z "$cow" ] && [ -n "$run_id" ]; then
+            gh run watch "$run_id" --repo "${{ github.repository }}" --exit-status --interval 60
+            cow="$(gh run view "$run_id" --repo "${{ github.repository }}" --log | grep -oE 'cow_[a-f0-9-]{36}' | tail -1)"
+          fi
+          echo "id=$cow" >> "$GITHUB_OUTPUT"
+          test -n "$cow" || { echo "no coworld id resolved" >&2; exit 1; }
+
+      - name: Create and poll episode
+        run: |
+          uv run --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git" python - <<'EOF'
+          import os, time, uuid
+          from coworld.api_client import CoworldApiClient
+          c = CoworldApiClient.from_login(server_url="https://softmax.com/api")
+          seats = int("${{ inputs.seats }}")
+          body = {
+              "idempotency_key": str(uuid.uuid4()),
+              "coworld_id": "${{ steps.cow.outputs.id }}",
+              "variant_id": "${{ inputs.variant }}",
+              "roster": [{"player": {"policy_ref": "${{ inputs.policy_ref }}"}, "slot": s} for s in range(seats)],
+              "num_episodes": 1,
+              "notes": "${{ inputs.notes }}",
+          }
+          xr = c.create_experience_request(body)
+          print("created:", xr.id, flush=True)
+          for i in range(80):
+              xr = c.get_experience_request(xr.id)
+              print(f"[{i}] {xr.status} done={xr.completed_count} failed={xr.failed_count}", flush=True)
+              if xr.status in ("completed", "failed"):
+                  for e in xr.episodes:
+                      print("EP", e.id, e.status)
+                      print("replay:", getattr(e, "replay_url", None))
+                      print("episode_id:", getattr(e, "episode_id", None))
+                      print("error:", getattr(e, "error_type", None), getattr(e, "error", None))
+                      print("scores:", [(str(s.policy_version_id)[:8], round(s.score, 3)) for s in (e.scores or [])])
+                  raise SystemExit(0 if xr.status == "completed" else 1)
+              time.sleep(120)
+          raise SystemExit("timed out waiting for episode")
+          EOF
