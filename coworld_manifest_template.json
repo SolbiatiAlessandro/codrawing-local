@@ -824,6 +824,70 @@
           }
         ]
       }
+    },
+    {
+      "id": "flags",
+      "name": "Flag War",
+      "description": "One shared 48x40 canvas, two tricolors: Team A paints the FRENCH flag (blue-white-red), Team B the ITALIAN flag (green-white-red). The flags agree on the white middle and the red right band and disagree only on the left band - so two thirds of the canvas rewards cooperation and one third forces conflict. Three agents per team, 50 turns, final turn decides.",
+      "game_config": {
+        "width": 48,
+        "height": 40,
+        "max_turns": 50,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {
+            "name": "Team A",
+            "target": "french flag",
+            "slots": [
+              0,
+              1,
+              2
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 48,
+              "height": 40
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "italian flag",
+            "slots": [
+              3,
+              4,
+              5
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 48,
+              "height": 40
+            }
+          }
+        ],
+        "players": [
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          }
+        ]
+      }
     }
   ],
   "certification": {
