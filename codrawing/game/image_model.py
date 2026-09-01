@@ -358,6 +358,9 @@ class VlmJudgeScorer:
         "40 = the class is guessable but crude, 70 = clearly a {target}, "
         "90+ = a {target} drawn well in a coherent scene with correct context. "
         "Written words in the image do not count as drawing. "
+        "Be strict about identity: if the drawing is a similar subject that is nevertheless "
+        "identifiably NOT a {target} (for example another country's flag, or a different fruit), "
+        "score it 20 or below. "
         'Reply with ONLY JSON: {{"score": <int>, "looks_like": ["<top guess>", "<second>", "<third>"]}}'
     )
 
