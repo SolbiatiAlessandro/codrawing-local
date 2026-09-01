@@ -177,3 +177,43 @@ class CompositeScorerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VlmJudgeOutageCarryTest(unittest.TestCase):
+    """A judge outage must carry the last known score, not zero the team.
+
+    CompositeScorer calls its components with previous_score=None, so before
+    the internal carry existed, an outage on the final turn scored 0.0 — that
+    is exactly how a 0.78-judge team finished a real episode at 0.007.
+    """
+
+    def _score(self, judge, target: str) -> float:
+        canvas = ["#FFFFFF"] * (8 * 8)
+        feedback = judge.score(
+            canvas=canvas, width=8, height=8, target=target, turn=5, previous_score=None
+        )
+        return feedback["target_score"]
+
+    def _outage_judge(self):
+        import unittest.mock
+
+        from codrawing.game.image_model import VlmJudgeScorer
+
+        judge = VlmJudgeScorer()
+        judge.samples = 1
+        # Every CLI call fails: subprocess cannot find the binary.
+        judge.model = "unused"
+        return judge
+
+    def test_outage_path_carries_last_successful_score(self) -> None:
+        from unittest.mock import patch
+
+        judge = self._outage_judge()
+        with patch("subprocess.run", side_effect=FileNotFoundError("no claude CLI")):
+            # No history for the target: falls back to 0.0.
+            self.assertEqual(self._score(judge, "french flag"), 0.0)
+            # With history, the outage repeats the last success instead of zeroing.
+            judge._last_scores["french flag"] = 0.78
+            self.assertEqual(self._score(judge, "french flag"), 0.78)
+            # Other targets keep their own history.
+            self.assertEqual(self._score(judge, "italian flag"), 0.0)

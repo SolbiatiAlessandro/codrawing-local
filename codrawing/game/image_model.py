@@ -365,6 +365,10 @@ class VlmJudgeScorer:
         self.model = model or os.environ.get("CODRAWING_JUDGE_MODEL", "claude-haiku-4-5-20251001")
         # Single judgments vary a lot on the same canvas; a small median tames it.
         self.samples = max(1, int(os.environ.get("CODRAWING_JUDGE_SAMPLES", "3")))
+        # Last successful score per target: the outage fallback when the caller
+        # cannot supply previous_score (CompositeScorer passes None), so a CLI
+        # hiccup on the final turn can never zero a team.
+        self._last_scores: dict[str, float] = {}
 
     def score(
         self,
@@ -416,8 +420,10 @@ class VlmJudgeScorer:
         os.unlink(path)
         if not payloads:
             # Judge outage must never kill the game loop: repeat the previous
-            # score with zero delta and let the next turn retry.
-            carried = previous_score if previous_score is not None else 0.0
+            # score with zero delta and let the next turn retry. When the
+            # caller has no previous score, fall back to the last score this
+            # judge produced for the target.
+            carried = previous_score if previous_score is not None else self._last_scores.get(target, 0.0)
             return {
                 "model": JUDGE_MODEL_NAME,
                 "turn": turn,
@@ -433,6 +439,7 @@ class VlmJudgeScorer:
         scores = sorted(int(p["score"]) for p in payloads)
         median = scores[len(scores) // 2]
         target_score = max(0.0, min(1.0, median / 100.0))
+        self._last_scores[target] = target_score
         guesses = [str(g) for g in payloads[0].get("looks_like", [])][:3]
         delta = 0.0 if previous_score is None else target_score - previous_score
 
