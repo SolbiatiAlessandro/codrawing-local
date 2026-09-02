@@ -888,6 +888,262 @@
           }
         ]
       }
+    },
+    {
+      "id": "flags-arena",
+      "name": "Flag Arena",
+      "description": "One shared 24x16 canvas, two tricolors: french flag vs italian flag. The flags agree on white and red and disagree only on the left band. 3v3, 80 turns - sized so a full flag is actually paintable.",
+      "game_config": {
+        "width": 24,
+        "height": 16,
+        "max_turns": 80,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {
+            "name": "Team A",
+            "target": "french flag",
+            "slots": [
+              0,
+              1,
+              2
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "italian flag",
+            "slots": [
+              3,
+              4,
+              5
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          }
+        ],
+        "players": [
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fruit-arena",
+      "name": "Fruit Arena",
+      "description": "One shared 24x16 canvas: pineapple vs strawberry, 3v3, 80 turns. The classic matchup on an arena where a full drawing is achievable.",
+      "game_config": {
+        "width": 24,
+        "height": 16,
+        "max_turns": 80,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {
+            "name": "Team A",
+            "target": "pineapple",
+            "slots": [
+              0,
+              1,
+              2
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "strawberry",
+            "slots": [
+              3,
+              4,
+              5
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          }
+        ],
+        "players": [
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "heart-skull",
+      "name": "Heart vs Skull",
+      "description": "r/place classic: one shared 24x16 canvas, heart vs skull, 3v3, 80 turns.",
+      "game_config": {
+        "width": 24,
+        "height": 16,
+        "max_turns": 80,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {
+            "name": "Team A",
+            "target": "heart",
+            "slots": [
+              0,
+              1,
+              2
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "skull",
+            "slots": [
+              3,
+              4,
+              5
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          }
+        ],
+        "players": [
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sun-moon",
+      "name": "Sun vs Moon",
+      "description": "One shared 24x16 canvas: sun vs crescent moon, 3v3, 80 turns.",
+      "game_config": {
+        "width": 24,
+        "height": 16,
+        "max_turns": 80,
+        "player_connect_timeout_seconds": 180,
+        "action_timeout_seconds": 60,
+        "teams": [
+          {
+            "name": "Team A",
+            "target": "sun",
+            "slots": [
+              0,
+              1,
+              2
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          },
+          {
+            "name": "Team B",
+            "target": "crescent moon",
+            "slots": [
+              3,
+              4,
+              5
+            ],
+            "region": {
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 16
+            }
+          }
+        ],
+        "players": [
+          {
+            "name": "A1"
+          },
+          {
+            "name": "A2"
+          },
+          {
+            "name": "A3"
+          },
+          {
+            "name": "B1"
+          },
+          {
+            "name": "B2"
+          },
+          {
+            "name": "B3"
+          }
+        ]
+      }
     }
   ],
   "certification": {
