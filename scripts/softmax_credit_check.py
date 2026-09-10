@@ -25,7 +25,7 @@ def main():
             if any(word in json.dumps(schema).lower() for word in ("credit", "balance", "allowance")):
                 print("CREDIT_SCHEMA", name, json.dumps(schema), flush=True)
         # Inspect public frontend code for account APIs missing from public OpenAPI.
-        page = client._http_client.get("https://softmax.com/observatory/v2")
+        page = client._http_client.get("https://softmax.com/observatory/v2", headers=client._headers())
         print("PUBLIC_PAGE_STATUS", page.status_code, flush=True)
         if page.status_code == 200:
             scripts = re.findall(r'<script[^>]+src="([^"]+)"', page.text)
@@ -36,7 +36,7 @@ def main():
                 response = client._http_client.get(url)
                 if response.status_code != 200:
                     continue
-                for match in re.finditer(r"credits|creditBalance|credit_balance|estimateCost|estimate-cost", response.text):
+                for match in re.finditer(r"credit|balance|estimated.?cost", response.text, re.I):
                     print("PUBLIC_JS_CREDIT", src, response.text[max(0, match.start()-160):match.end()+240], flush=True)
         full = client._http_client.get("https://softmax.com/api/openapi.json", headers=client._headers())
         print("FULL_API_STATUS", full.status_code, flush=True)
