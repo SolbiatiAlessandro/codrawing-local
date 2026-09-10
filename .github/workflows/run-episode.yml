@@ -1,4 +1,4 @@
-name: softmax-credit-check
+name: resolve-hosted-replay
 
 on:
   workflow_dispatch:
@@ -21,8 +21,8 @@ jobs:
           umask 077
           mkdir -p ~/.softmax
           printf '%s' "$SOFTMAX_CREDENTIALS" > ~/.softmax/credentials.yaml
-      - name: Read current credit API and account allowance
-        run: uv run --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python scripts/softmax_credit_check.py
+      - name: Resolve the existing hosted replay viewer
+        run: uv run --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python scripts/get_hosted_replay.py
       - name: Remove runner credential file
         if: always()
         run: rm -f ~/.softmax/credentials.yaml
