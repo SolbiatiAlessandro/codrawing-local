@@ -5,7 +5,7 @@ from coworld.api_client import CoworldApiClient
 
 def main():
     with CoworldApiClient.from_login(server_url="https://softmax.com/api") as client:
-        for path in ("/credits/me", "/credits"):
+        for path in ("/v2/credits/me", "/v2/credits", "https://softmax.com/api/credits"):
             r = client._http_client.get(path, headers=client._headers())
             print("ACCOUNT_ROUTE", path, r.status_code, flush=True)
             if r.status_code == 200:
