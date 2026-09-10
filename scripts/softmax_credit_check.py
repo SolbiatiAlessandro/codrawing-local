@@ -38,6 +38,17 @@ def main():
                     continue
                 for match in re.finditer(r"credits|creditBalance|credit_balance|estimateCost|estimate-cost", response.text):
                     print("PUBLIC_JS_CREDIT", src, response.text[max(0, match.start()-160):match.end()+240], flush=True)
+        full = client._http_client.get("https://softmax.com/api/openapi.json", headers=client._headers())
+        print("FULL_API_STATUS", full.status_code, flush=True)
+        if full.status_code == 200:
+            full_spec = full.json()
+            for path, operation in full_spec.get("paths", {}).items():
+                if any(word in path.lower() for word in ("credit", "estimate", "balance", "cost")):
+                    print("FULL_CREDIT_API", path, json.dumps(operation), flush=True)
+        print("PUBLIC_SCRIPT_COUNT", len(scripts) if page.status_code == 200 else 0, flush=True)
+        if page.status_code == 200:
+            print("PUBLIC_SCRIPT_URLS", json.dumps(scripts), flush=True)
+            print("PUBLIC_PAGE_TITLE", re.findall(r"<title>(.*?)</title>", page.text), flush=True)
         names = set()
         for path, operations in spec["paths"].items():
             if any(word in path.lower() for word in ("credit", "estimate", "pricing", "balance")):
