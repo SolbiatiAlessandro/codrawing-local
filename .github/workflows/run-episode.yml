@@ -1,4 +1,4 @@
-name: resolve-hosted-replay
+name: list-hosted-replays
 
 on:
   workflow_dispatch:
@@ -21,8 +21,14 @@ jobs:
           umask 077
           mkdir -p ~/.softmax
           printf '%s' "$SOFTMAX_CREDENTIALS" > ~/.softmax/credentials.yaml
-      - name: Resolve the existing hosted replay viewer
-        run: uv run --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python scripts/get_hosted_replay.py
+      - name: List existing hosted BOTPAINT replays
+        run: uv run --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python scripts/list_hosted_replays.py
+      - name: Save replay inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-replay-inventory
+          path: hosted-replay-inventory.json
+          retention-days: 30
       - name: Remove runner credential file
         if: always()
         run: rm -f ~/.softmax/credentials.yaml
