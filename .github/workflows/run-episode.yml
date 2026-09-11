@@ -19,13 +19,13 @@ jobs:
           printf '%s' "$SOFTMAX_CREDENTIALS" > ~/.softmax/credentials.yaml
           uv run --python 3.12 --with 'git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b' python - <<'PY'
           import json
-          from coworld.upload import CoworldUploadClient
+          from coworld.upload import CoworldUploadClient, DEFAULT_SUBMIT_SERVER
           out=[]
-          with CoworldUploadClient.from_login() as client:
+          with CoworldUploadClient.from_login(server_url=DEFAULT_SUBMIT_SERVER) as client:
               for row in client.iter_coworlds_by_name('botpaint'):
                   cow=client.get_coworld(row.id)
                   cert=client.get_coworld_certification(row.id)
-                  out.append({'id':cow.id,'name':cow.name,'version':cow.version,'canonical':cow.canonical,'viewer':cow.manifest.get('game',{}).get('replay_viewer'),'certification':cert.model_dump(mode='json')})
+                  out.append({'id':cow.id,'name':cow.name,'version':cow.version,'canonical':cow.canonical,'viewer':cow.manifest.get('game',{}).get('replay_viewer'),'certification':{'state':cert.state,'failed_step':cert.failed_step}})
           with open('botpaint-publication-status.json','w') as f:json.dump(out,f,indent=2)
           for row in out:
               print(json.dumps({k:row[k] for k in ('id','name','version','canonical','viewer')}))
