@@ -8,10 +8,16 @@
 
 FROM docker.io/library/python:3.12-slim AS weights
 
+# Pin the matching CPU torch/vision pair in both installs. An unconstrained
+# torchvision can replace CPU torch with a new CUDA build and exceed the
+# hosted 5120 MiB image limit.
+
 RUN pip install --no-cache-dir \
       --index-url https://download.pytorch.org/whl/cpu \
-      torch==2.8.0 \
- && pip install --no-cache-dir open-clip-torch==3.3.0
+      torch==2.8.0+cpu torchvision==0.23.0+cpu \
+ && pip install --no-cache-dir torch==2.8.0+cpu torchvision==0.23.0+cpu open-clip-torch==3.3.0 \
+ && pip check \
+ && python -c "import torch; assert torch.version.cuda is None, torch.__version__"
 
 # Pull the weights at build time so an episode never depends on the network.
 ENV HF_HOME=/weights
@@ -26,19 +32,21 @@ FROM docker.io/library/python:3.12-slim AS game
 # that inference never reads.
 RUN pip install --no-cache-dir \
       --index-url https://download.pytorch.org/whl/cpu \
-      torch==2.8.0 \
+      torch==2.8.0+cpu torchvision==0.23.0+cpu \
  && pip install --no-cache-dir \
+      torch==2.8.0+cpu torchvision==0.23.0+cpu \
       fastapi==0.115.5 \
       uvicorn[standard]==0.34.2 \
       websockets==15.0.1 \
       open-clip-torch==3.3.0 \
       pillow==11.3.0 \
+ && pip check \
  && SP=/usr/local/lib/python3.12/site-packages \
  && rm -rf "$SP"/torch/include "$SP"/torch/test \
       "$SP"/torch/share "$SP"/torch/utils/benchmark \
       "$SP"/torchgen/packaged \
  && find /usr/local/lib/python3.12 -depth -name __pycache__ -type d -exec rm -rf {} + \
- && python -c "import torch, torchvision, open_clip, fastapi, uvicorn, websockets, PIL; print('imports survive cleanup; torch', torch.__version__)"
+ && python -c "import torch, torchvision, open_clip, fastapi, uvicorn, websockets, PIL; assert torch.version.cuda is None, torch.__version__; print('imports survive cleanup; torch', torch.__version__)"
 
 COPY --from=weights /weights /weights
 
