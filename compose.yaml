@@ -1,12 +1,12 @@
 services:
   codrawing-versus:
-    image: coplace-versus:latest
+    image: botpaint:latest
     platform: linux/amd64
     build:
       context: .
       target: game
   codrawing-versus-player:
-    image: coplace-versus-player:latest
+    image: botpaint-player:latest
     platform: linux/amd64
     build:
       context: .

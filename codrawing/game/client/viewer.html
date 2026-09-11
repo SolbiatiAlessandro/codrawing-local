@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>codrawing · the robot atelier</title>
+  <title>botpaint · the robot atelier</title>
   <style>
     /* The atelier faces. Loaded from inside the stylesheet, not a <link>,
        because the standalone match page keeps only this <style> block. */
@@ -175,7 +175,7 @@
 <body>
 <main id="main">
   <div class="hdr">
-    <div class="wordmark"><span class="wm1">CODRAWING</span><span class="wm2">the robot atelier</span></div>
+    <div class="wordmark"><span class="wm1">BOTPAINT</span><span class="wm2">the robot atelier</span></div>
     <div class="clock"><div class="t" id="clock">TURN 0 / 0</div><div class="bar"><i id="clockbar"></i></div></div>
     <div class="matchup" id="matchup">&nbsp;</div>
   </div>
@@ -844,7 +844,7 @@
       ctx.fillRect((i % frame.width) * cell, Math.floor(i / frame.width) * cell, cell, cell);
     });
     const link = document.createElement('a');
-    link.download = 'atelier-' + frame.target.replace(/\s+/g, '-') + '.png';
+    link.download = 'botpaint-' + frame.target.replace(/\s+/g, '-') + '.png';
     link.href = output.toDataURL('image/png');
     link.click();
   });

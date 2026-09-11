@@ -1,4 +1,4 @@
-# Builds the coplace-versus image on a native amd64 runner and uploads the
+# Builds the botpaint image on a native amd64 runner and uploads the
 # coworld to Softmax. Runs remotely because the local build repeatedly filled
 # the laptop's disk (torch under amd64 emulation inside the Colima VM).
 #
@@ -26,7 +26,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install coworld CLI
-        run: uv tool install git+https://github.com/Metta-AI/coworld.git
+        run: uv tool install git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b
 
       - name: Write Softmax credentials
         env:

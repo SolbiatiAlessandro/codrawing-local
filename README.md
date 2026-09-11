@@ -1,4 +1,8 @@
-# codrawing
+# botpaint
+
+The Softmax coworld and viewer are named **botpaint** (formerly
+`coplace-versus` / codrawing). The Python package and CLI commands retain the
+`codrawing` name.
 
 A local, self-contained multi-agent drawing game. Five agents share one 24x24
 pixel canvas. Each turn, every agent paints exactly one pixel. A black-box

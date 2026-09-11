@@ -8,8 +8,8 @@
     "multi-agent"
   ],
   "game": {
-    "name": "coplace-versus",
-    "description": "Adversarial co/place: two teams of four agents share one canvas and are given different drawing targets. Each team's rectangle is cropped and scored on its own every turn by a frozen MobileCLIP2 classifier. Regions are scoring boundaries, not painting restrictions - any seat may paint or erase any pixel, including inside the other team's half - and only the score on the FINAL turn decides the winner, so a lead can be taken away and must be defended.",
+    "name": "botpaint",
+    "description": "botpaint: two teams of four agents share one canvas and are given different drawing targets. Each team's rectangle is cropped and scored on its own every turn by a frozen MobileCLIP2 classifier. Regions are scoring boundaries, not painting restrictions - any seat may paint or erase any pixel, including inside the other team's half - and only the score on the FINAL turn decides the winner, so a lead can be taken away and must be defended.",
     "owner": "Alessandro",
     "runnable": {
       "type": "game",
@@ -436,7 +436,7 @@
     "docs": {
       "readme": {
         "type": "text",
-        "value": "# co/place versus\n\nTwo teams of four agents share one canvas. Each team is given a different target word and owns a rectangle of the board. Every turn, each team's rectangle is cropped out and scored on its own by a frozen MobileCLIP2-S0 classifier against that team's target, and both teams see both scores.\n\nEach agent gets one pixel and one board post per turn. Teammates who pick the same pixel in the same turn cancel each other out - all contending writes are dropped.\n\nTwo rules make the game adversarial rather than two drawings side by side:\n\n1. A region is a *scoring* boundary, not a painting one. Any seat may paint or erase any pixel on the shared canvas, including inside the other team's half.\n2. The winner is decided by the score on the FINAL turn, not the best score reached. A peak that could not be taken away would make erasing an opponent's pixels pointless and give nobody a reason to defend a finished drawing.\n\nSo a team can spend its turns drawing, raiding the other half, defending its own, or trading between them - and it has to choose."
+        "value": "# botpaint\n\nTwo teams of four agents share one canvas. Each team is given a different target word and owns a rectangle of the board. Every turn, each team's rectangle is cropped out and scored on its own by a frozen MobileCLIP2-S0 classifier against that team's target, and both teams see both scores.\n\nEach agent gets one pixel and one board post per turn. Teammates who pick the same pixel in the same turn cancel each other out - all contending writes are dropped.\n\nTwo rules make the game adversarial rather than two drawings side by side:\n\n1. A region is a *scoring* boundary, not a painting one. Any seat may paint or erase any pixel on the shared canvas, including inside the other team's half.\n2. The winner is decided by the score on the FINAL turn, not the best score reached. A peak that could not be taken away would make erasing an opponent's pixels pointless and give nobody a reason to defend a finished drawing.\n\nSo a team can spend its turns drawing, raiding the other half, defending its own, or trading between them - and it has to choose."
       },
       "pages": [
         {
