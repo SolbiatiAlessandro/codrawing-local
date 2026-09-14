@@ -34,7 +34,7 @@ def seed_record(seed):
     return {k:getattr(seed,k) for k in ('id','coworld_name','league_key','league_name','default_variant_id','enabled','league_id')}
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['inspect','create'])
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['inspect','create','configure'])
     args=parser.parse_args()
     with CoworldUploadClient.from_login(server_url=SERVER) as upload, CoworldApiClient.from_login(server_url=SERVER) as api:
         cow=upload.find_canonical_coworld('botpaint')
@@ -65,7 +65,8 @@ def main():
         data=request(api,'GET',f'/v2/leagues/{league_id}')
         if data:
             state['league']={k:data.get(k) for k in ('id','name','slug','public','hidden','commissioner_key','disabled_at')}
-        data=request(api,'GET',f'/v2/leagues/{league_id}/settings')
+        settings_response=request(api,'GET',f'/v2/leagues/{league_id}/settings')
+        data=settings_response
         if data:
             # Configuration fields only. Secret references and owner identity are intentionally excluded.
             state['settings_keys']=list(data)
@@ -76,7 +77,18 @@ def main():
         data=request(api,'GET',f'/v2/leagues/{league_id}/locks')
         if data:
             state['locks']=data
-        state['phase']='league_created_or_existing';save();print(json.dumps(state,default=str),flush=True)
+        state['phase']='league_created_or_existing'
+        if args.action=='configure':
+            if settings_response is None:
+                state['phase']='settings_unreadable';save();raise SystemExit('Cannot preserve unreadable league settings')
+            if state.get('effective_ladder_config',{}).get('enabled'):
+                state['phase']='already_enabled_no_changes';save();raise SystemExit('Existing active ladder preserved')
+            divisions=request(api,'PUT',f'/v2/leagues/{league_id}/divisions',{'divisions':[{'name':'Competition','level':1,'type':'competition','hidden':False}]})
+            if divisions is None:
+                state['phase']='division_setup_rejected';save();raise SystemExit('Division setup rejected; no scheduler changes attempted')
+            state['division_setup_response']=divisions
+            state['phase']='divisions_declared_scheduler_pending'
+        save();print(json.dumps(state,default=str),flush=True)
 
 if __name__=='__main__':
     try:

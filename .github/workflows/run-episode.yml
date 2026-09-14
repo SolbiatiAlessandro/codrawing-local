@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Inspect or create the BOTPAINT league
+        description: Inspect, create or configure the BOTPAINT league
         type: choice
-        options: [inspect, create]
+        options: [inspect, create, configure]
         default: inspect
 permissions:
   contents: read
