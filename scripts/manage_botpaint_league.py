@@ -1,5 +1,6 @@
 """Create/inspect the owner-authorized BOTPAINT league with sanitized evidence."""
 import argparse
+from types import SimpleNamespace
 import json
 from pathlib import Path
 from datetime import datetime, timezone
@@ -42,7 +43,8 @@ def main():
         state['coworld']={k:getattr(cow,k) for k in ('id','name','version','canonical','manifest_hash')}
         state['variants']=[{'id':v['id'],'width':v['game_config'].get('width'),'height':v['game_config'].get('height'),'seats':len(v['game_config'].get('players',[])),'turns':v['game_config'].get('max_turns'),'targets':[t['target'] for t in v['game_config'].get('teams',[])]} for v in cow.manifest['variants']]
         save();print(json.dumps(state['coworld']),flush=True)
-        seeds=[s for s in upload.list_league_seeds() if s.coworld_name=='botpaint']
+        raw_seeds=request(upload,'GET','/v2/coworld-league-seeds')
+        seeds=[SimpleNamespace(**s) for s in (raw_seeds or []) if s['coworld_name']=='botpaint']
         leagues=[l for l in api.list_leagues() if l.game.coworld_name=='botpaint']
         state['seeds']=[seed_record(s) for s in seeds]
         state['leagues']=[{'id':l.id,'name':l.name,'slug':l.slug,'public':l.public,'hidden':l.hidden,'disabled_at':l.disabled_at,'commissioner_key':l.commissioner_key} for l in leagues]
@@ -50,7 +52,10 @@ def main():
         if len(seeds)>1 or len(leagues)>1:
             raise SystemExit('Multiple BOTPAINT leagues; no mutation performed')
         if not seeds and not leagues and args.action=='create':
-            seed=upload.create_league_seed(coworld_name='botpaint',league_key='default',league_name='BOTPAINT',overrides={'commissioner_key':'platform'})
+            data=request(upload,'POST','/v2/coworld-league-seeds',{'coworld_name':'botpaint','league_key':'default','league_name':'BOTPAINT','template':'commissioner_driven','enabled':True,'overrides':{'commissioner_key':'platform'}})
+            if data is None:
+                state['phase']='creation_rejected';save();raise SystemExit('League creation rejected; see sanitized status')
+            seed=SimpleNamespace(**data)
             seeds=[seed];state['seeds']=[seed_record(seed)];state['created']=True;save()
         league_id=seeds[0].league_id if seeds else (leagues[0].id if leagues else None)
         if not league_id:
