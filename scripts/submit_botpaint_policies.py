@@ -49,16 +49,53 @@ def submission_record(s):
     pl = s.get('player') or {}
     return {
         'id': s.get('id'), 'status': s.get('status'), 'created_at': s.get('created_at'),
-        'policy': pv.get('name') or pv.get('policy_name'), 'policy_version_id': pv.get('id'),
+        'policy': pv.get('name') or pv.get('policy_name'), 'policy_version_id': str(pv.get('id')) if pv.get('id') else None,
         'player_id': pl.get('id'), 'player_name': pl.get('name'), 'auto_champion': s.get('auto_champion'),
     }
 
 
+def _pick(d, keys):
+    return {k: d.get(k) for k in keys if k in d} if isinstance(d, dict) else d
+
+
+def rounds_report(api):
+    """Read-only: champions, ladder, recent rounds and their episodes (sanitized)."""
+    mem = request(api, 'GET', '/v2/league-policy-memberships', params={'league_id': LEAGUE, 'active_only': 'true', 'limit': 20})
+    entries = mem.get('entries', mem) if isinstance(mem, dict) else (mem or [])
+    state['memberships'] = [
+        {'id': m.get('id'), 'status': m.get('status'), 'is_champion': m.get('is_champion') or m.get('champion'),
+         'division_id': m.get('division_id'), 'player': _pick(m.get('player') or {}, ('id', 'name')),
+         'policy_version_id': str((m.get('policy_version') or {}).get('id') or m.get('policy_version_id')),
+         'rating': m.get('rating') or m.get('elo'), 'created_at': m.get('created_at')}
+        for m in entries if isinstance(m, dict)]
+    ladder = request(api, 'GET', f'/v2/leagues/{LEAGUE}/division-ladder')
+    if isinstance(ladder, dict):
+        state['division_ladder_keys'] = list(ladder)
+        state['division_ladder'] = _pick(ladder, ('enabled', 'paused', 'status', 'divisions', 'next_round_at', 'last_round_at', 'round_interval_minutes'))
+    rounds = request(api, 'GET', '/v2/rounds', params={'league_id': LEAGUE, 'limit': 10})
+    rentries = rounds.get('entries', rounds) if isinstance(rounds, dict) else (rounds or [])
+    out = []
+    for r in rentries:
+        if not isinstance(r, dict):
+            continue
+        rec = _pick(r, ('id', 'status', 'division_id', 'round_number', 'created_at', 'started_at', 'completed_at', 'settled_at', 'planned_at'))
+        eps = request(api, 'GET', f"/v2/rounds/{r.get('id')}/episodes", params={'limit': 10})
+        eentries = eps.get('entries', eps) if isinstance(eps, dict) else (eps or [])
+        rec['episodes'] = [_pick(e, ('id', 'episode_id', 'status', 'created_at', 'completed_at', 'replay_url', 'variant_id', 'seats')) for e in eentries if isinstance(e, dict)]
+        out.append(rec)
+    state['rounds'] = out
+    state['phase'] = 'rounds_report'
+    save()
+    print(json.dumps({'memberships': state['memberships'], 'ladder': state.get('division_ladder'), 'rounds': out}, default=str), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['status', 'submit'])
+    parser.add_argument('action', choices=['status', 'submit', 'rounds'])
     args = parser.parse_args()
     with CoworldApiClient.from_login(server_url=SERVER) as api:
+        if args.action == 'rounds':
+            rounds_report(api); return
         players = [p for p in (request(api, 'GET', '/players') or []) if not p.get('disabled_at')]
         state['players'] = [player_record(p) for p in players]
         versions = {}

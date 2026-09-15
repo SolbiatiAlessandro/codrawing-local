@@ -5,7 +5,7 @@ on:
       action:
         description: Inspect/create/configure the BOTPAINT league, or list/submit its policies
         type: choice
-        options: [inspect, create, configure, submissions-status, submit]
+        options: [inspect, create, configure, submissions-status, submit, rounds]
         default: inspect
 permissions:
   contents: read
@@ -34,6 +34,7 @@ jobs:
           case "$LEAGUE_ACTION" in
             submissions-status) script=scripts/submit_botpaint_policies.py; arg=status ;;
             submit) script=scripts/submit_botpaint_policies.py; arg=submit ;;
+            rounds) script=scripts/submit_botpaint_policies.py; arg=rounds ;;
             *) script=scripts/manage_botpaint_league.py; arg="$LEAGUE_ACTION" ;;
           esac
           uv run --no-project --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python "$script" "$arg"
