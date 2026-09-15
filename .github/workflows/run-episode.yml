@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Inspect, create or configure the BOTPAINT league
+        description: Inspect/create/configure the BOTPAINT league, or list/submit its policies
         type: choice
-        options: [inspect, create, configure]
+        options: [inspect, create, configure, submissions-status, submit]
         default: inspect
 permissions:
   contents: read
@@ -30,12 +30,20 @@ jobs:
       - name: Manage BOTPAINT league
         env:
           LEAGUE_ACTION: ${{ inputs.action }}
-        run: uv run --no-project --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python scripts/manage_botpaint_league.py "$LEAGUE_ACTION"
+        run: |
+          case "$LEAGUE_ACTION" in
+            submissions-status) script=scripts/submit_botpaint_policies.py; arg=status ;;
+            submit) script=scripts/submit_botpaint_policies.py; arg=submit ;;
+            *) script=scripts/manage_botpaint_league.py; arg="$LEAGUE_ACTION" ;;
+          esac
+          uv run --no-project --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python "$script" "$arg"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: botpaint-league-status
-          path: botpaint-league-status.json
+          path: |
+            botpaint-league-status.json
+            botpaint-submissions-status.json
           if-no-files-found: ignore
           retention-days: 30
       - name: Remove runner login
