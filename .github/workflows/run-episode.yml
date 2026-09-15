@@ -7,6 +7,10 @@ on:
         type: choice
         options: [inspect, create, configure, submissions-status, submit, rounds, diagnose]
         default: inspect
+      episode_request_ids:
+        description: Comma-separated episode request ids for diagnose
+        required: false
+        default: ""
       round_id:
         description: Round id for diagnose
         required: false
