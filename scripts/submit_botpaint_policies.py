@@ -13,7 +13,7 @@ from coworld.api_client import CoworldApiClient
 SERVER = 'https://softmax.com/api'
 LEAGUE = 'league_3f6f5062-ce72-44dd-bc9e-7bd2c8682f43'
 # (policy name, player display name; None = the account's default player)
-PLAN = [('botpaint-sonnet5', None), ('botpaint-flashlite', 'BOTPAINT Flash Lite')]
+PLAN = [('botpaint-sonnet5', None), ('botpaint-gemini-flashlite', '@lessandro-forum-power-user')]
 OUT = Path('botpaint-submissions-status.json')
 state = {'checked_at': datetime.now(timezone.utc).isoformat(), 'operations': [], 'league_id': LEAGUE}
 

@@ -49,6 +49,10 @@ on:
         type: boolean
         required: true
         default: true
+      player:
+        description: "Optional player id (ply_...) to own the policy; blank = the account's default player"
+        required: false
+        default: ""
 
 jobs:
   upload:
@@ -71,6 +75,12 @@ jobs:
           mkdir -p ~/.softmax
           printf '%s' "$SOFTMAX_CREDENTIALS" > ~/.softmax/credentials.yaml
           chmod 600 ~/.softmax/credentials.yaml
+
+      - name: Act as the requested player
+        if: ${{ inputs.player != '' }}
+        env:
+          PLAYER_ID: ${{ inputs.player }}
+        run: uv tool run --from softmax-cli==0.26.32 softmax player use "$PLAYER_ID" --server https://softmax.com/api
 
       - name: Build the player image
         run: |
