@@ -13,7 +13,7 @@ from coworld.api_client import CoworldApiClient
 SERVER = 'https://softmax.com/api'
 LEAGUE = 'league_3f6f5062-ce72-44dd-bc9e-7bd2c8682f43'
 # (policy name, player display name; None = the account's default player)
-PLAN = [('botpaint-sonnet5', None), ('botpaint-gemini-flashlite', '@lessandro-forum-power-user')]
+PLAN = [('botpaint-bedrock-sonnet46', None), ('botpaint-bedrock-haiku45', '@lessandro-forum-power-user')]
 OUT = Path('botpaint-submissions-status.json')
 state = {'checked_at': datetime.now(timezone.utc).isoformat(), 'operations': [], 'league_id': LEAGUE}
 
@@ -189,8 +189,15 @@ def main():
                 'league_id': LEAGUE, 'policy_version_id': pv['id'], 'player_id': player['id'],
                 'auto_champion': 'always', 'notes': f'BOTPAINT league entry: {name}',
             })
-            results.append({'policy': name, 'player_id': player['id'], 'player_name': player.get('name'),
-                            'submission': None if data is None else submission_record(data)})
+            rec = {'policy': name, 'player_id': player['id'], 'player_name': player.get('name'),
+                   'submission': None if data is None else submission_record(data)}
+            # One champion per player: promote the new membership so the previous entry is benched.
+            mid = (data or {}).get('league_policy_membership_id')
+            if mid:
+                promoted = request(api, 'POST', f'/v2/league-policy-memberships/{mid}/champion', {})
+                rec['champion'] = {'membership_id': mid, 'ok': promoted is not None,
+                                   'status': promoted.get('status') if isinstance(promoted, dict) else None}
+            results.append(rec)
             state['results'] = results; save()
         state['results'] = results
         state['phase'] = 'submitted' if any(r.get('submission') for r in results) else 'nothing_submitted'
