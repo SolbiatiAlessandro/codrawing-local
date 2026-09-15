@@ -121,7 +121,11 @@ def diagnose(api):
     for r in entries:
         rid = r.get('id')
         full = request(api, 'GET', f'/v2/episode-requests/{rid}') or {}
-        rec = {k: v for k, v in full.items() if any(s in k.lower() for s in ('id', 'status', 'reason', 'error', 'fail', 'message', 'created', 'completed', 'started', 'job', 'variant', 'phase', 'summary'))}
+        rec = {k: v for k, v in full.items() if k not in ('game_config', 'participants')}
+        gc = full.get('game_config') or {}
+        rec['game_config_summary'] = {'width': gc.get('width'), 'height': gc.get('height'), 'max_turns': gc.get('max_turns'),
+                                      'teams': [{'target': t.get('target'), 'slots': t.get('slots') or t.get('seats')} for t in gc.get('teams', []) if isinstance(t, dict)]}
+        rec['participants'] = [{k: v for k, v in p.items() if k in ('position', 'policy_version_id', 'policy_name', 'player_id', 'player_name', 'team', 'score')} for p in (full.get('participants') or []) if isinstance(p, dict)]
         rec['keys'] = list(full)
         stats = request(api, 'GET', f'/v2/episode-requests/{rid}/episode-stats')
         rec['stats'] = scrub(json.dumps(stats, default=str))[:1500] if stats is not None else None
