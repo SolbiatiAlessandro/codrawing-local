@@ -1,0 +1,43 @@
+name: botpaint-submit-policies
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: status (read only) or submit both BOTPAINT policies
+        type: choice
+        options: [status, submit]
+        default: status
+permissions:
+  contents: read
+concurrency:
+  group: botpaint-submit-policies
+  cancel-in-progress: false
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Load existing Softmax login
+        env:
+          SOFTMAX_CREDENTIALS: ${{ secrets.SOFTMAX_CREDENTIALS }}
+        run: |
+          test -n "$SOFTMAX_CREDENTIALS"
+          umask 077
+          mkdir -p ~/.softmax
+          printf '%s' "$SOFTMAX_CREDENTIALS" > ~/.softmax/credentials.yaml
+      - name: Submit BOTPAINT policies
+        env:
+          SUBMIT_ACTION: ${{ inputs.action }}
+        run: uv run --no-project --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python scripts/submit_botpaint_policies.py "$SUBMIT_ACTION"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: botpaint-submissions-status
+          path: botpaint-submissions-status.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Remove runner login
+        if: always()
+        run: rm -f ~/.softmax/credentials.yaml
