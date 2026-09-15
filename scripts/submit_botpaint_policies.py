@@ -102,16 +102,21 @@ def scrub(text):
 def diagnose(api):
     """Read-only: why did a round's episodes fail? Sanitized excerpts only."""
     round_id = os.environ.get('ROUND_ID')
-    if not round_id:
-        raise SystemExit('ROUND_ID is required for diagnose')
-    rnd = request(api, 'GET', f'/v2/rounds/{round_id}')
-    state['round'] = {k: v for k, v in (rnd or {}).items() if any(s in k for s in ('id', 'status', 'number', 'reason', 'error', 'message', 'created', 'completed'))}
-    logs = request(api, 'GET', f'/v2/rounds/{round_id}/commissioner-logs')
-    state['commissioner_logs'] = scrub(json.dumps(logs, default=str))[-4000:] if logs is not None else None
-    ev = request(api, 'GET', '/v2/policy-membership-events', params={'league_id': LEAGUE, 'limit': 20})
-    state['membership_events'] = scrub(json.dumps(ev, default=str))[-3000:] if ev is not None else None
-    reqs = request(api, 'GET', f'/v2/rounds/{round_id}/episode-requests', params={'limit': 10})
-    entries = reqs.get('entries', reqs) if isinstance(reqs, dict) else (reqs or [])
+    ereq_ids = [x.strip() for x in os.environ.get('EPISODE_REQUEST_IDS', '').split(',') if x.strip()]
+    if not round_id and not ereq_ids:
+        raise SystemExit('ROUND_ID or EPISODE_REQUEST_IDS is required for diagnose')
+    state['round'] = None; state['commissioner_logs'] = None; state['membership_events'] = None
+    if round_id:
+        rnd = request(api, 'GET', f'/v2/rounds/{round_id}')
+        state['round'] = {k: v for k, v in (rnd or {}).items() if any(s in k for s in ('id', 'status', 'number', 'reason', 'error', 'message', 'created', 'completed'))}
+        logs = request(api, 'GET', f'/v2/rounds/{round_id}/commissioner-logs')
+        state['commissioner_logs'] = scrub(json.dumps(logs, default=str))[-4000:] if logs is not None else None
+        ev = request(api, 'GET', '/v2/policy-membership-events', params={'league_id': LEAGUE, 'limit': 20})
+        state['membership_events'] = scrub(json.dumps(ev, default=str))[-3000:] if ev is not None else None
+        reqs = request(api, 'GET', f'/v2/rounds/{round_id}/episode-requests', params={'limit': 10})
+        entries = reqs.get('entries', reqs) if isinstance(reqs, dict) else (reqs or [])
+    else:
+        entries = [{'id': i} for i in ereq_ids]
     out = []
     for r in entries:
         rid = r.get('id')
@@ -121,8 +126,8 @@ def diagnose(api):
         stats = request(api, 'GET', f'/v2/episode-requests/{rid}/episode-stats')
         rec['stats'] = scrub(json.dumps(stats, default=str))[:1500] if stats is not None else None
         rec['policy_logs'] = {}
-        for pv_id in ('906b05ea-b9fb-4924-b9dc-bba2ff5c4711', 'b9227910-f0a3-427a-ae33-33852b0c1d63'):
-            for agent_idx in range(6):
+        for pv_id in sorted(set(full.get('policy_version_ids') or [])):
+            for agent_idx in range(8):
                 resp = api._http_client.request('GET', f'/v2/episode-requests/{rid}/{pv_id}/policy-logs/{agent_idx}', headers=api._headers(), timeout=120)
                 state['operations'].append({'method': 'GET', 'path': f'/v2/episode-requests/{rid}/{pv_id[:8]}/policy-logs/{agent_idx}', 'status': resp.status_code})
                 if resp.status_code < 400 and resp.content:

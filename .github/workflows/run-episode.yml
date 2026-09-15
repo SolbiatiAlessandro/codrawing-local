@@ -35,6 +35,7 @@ jobs:
         env:
           LEAGUE_ACTION: ${{ inputs.action }}
           ROUND_ID: ${{ inputs.round_id }}
+          EPISODE_REQUEST_IDS: ${{ inputs.episode_request_ids }}
         run: |
           case "$LEAGUE_ACTION" in
             submissions-status) script=scripts/submit_botpaint_policies.py; arg=status ;;
