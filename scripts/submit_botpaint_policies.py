@@ -89,13 +89,62 @@ def rounds_report(api):
     print(json.dumps({'memberships': state['memberships'], 'ladder': state.get('division_ladder'), 'rounds': out}, default=str), flush=True)
 
 
+import os
+import re
+
+SECRET_RE = re.compile(r'(sk-or-[A-Za-z0-9_-]+|Bearer\s+\S+|ply_[0-9a-f-]{36}\.\S+|token=\S+)')
+
+
+def scrub(text):
+    return SECRET_RE.sub('[REDACTED]', text)
+
+
+def diagnose(api):
+    """Read-only: why did a round's episodes fail? Sanitized excerpts only."""
+    round_id = os.environ.get('ROUND_ID')
+    if not round_id:
+        raise SystemExit('ROUND_ID is required for diagnose')
+    rnd = request(api, 'GET', f'/v2/rounds/{round_id}')
+    state['round'] = {k: v for k, v in (rnd or {}).items() if any(s in k for s in ('id', 'status', 'number', 'reason', 'error', 'message', 'created', 'completed'))}
+    logs = request(api, 'GET', f'/v2/rounds/{round_id}/commissioner-logs')
+    state['commissioner_logs'] = scrub(json.dumps(logs, default=str))[-4000:] if logs is not None else None
+    ev = request(api, 'GET', '/v2/policy-membership-events', params={'league_id': LEAGUE, 'limit': 20})
+    state['membership_events'] = scrub(json.dumps(ev, default=str))[-3000:] if ev is not None else None
+    reqs = request(api, 'GET', f'/v2/rounds/{round_id}/episode-requests', params={'limit': 10})
+    entries = reqs.get('entries', reqs) if isinstance(reqs, dict) else (reqs or [])
+    out = []
+    for r in entries:
+        rid = r.get('id')
+        full = request(api, 'GET', f'/v2/episode-requests/{rid}') or {}
+        rec = {k: v for k, v in full.items() if any(s in k.lower() for s in ('id', 'status', 'reason', 'error', 'fail', 'message', 'created', 'completed', 'started', 'job', 'variant', 'phase', 'summary'))}
+        rec['keys'] = list(full)
+        stats = request(api, 'GET', f'/v2/episode-requests/{rid}/episode-stats')
+        rec['stats'] = scrub(json.dumps(stats, default=str))[:1500] if stats is not None else None
+        rec['policy_logs'] = {}
+        for pv_id in ('906b05ea-b9fb-4924-b9dc-bba2ff5c4711', 'b9227910-f0a3-427a-ae33-33852b0c1d63'):
+            for agent_idx in range(6):
+                resp = api._http_client.request('GET', f'/v2/episode-requests/{rid}/{pv_id}/policy-logs/{agent_idx}', headers=api._headers(), timeout=120)
+                state['operations'].append({'method': 'GET', 'path': f'/v2/episode-requests/{rid}/{pv_id[:8]}/policy-logs/{agent_idx}', 'status': resp.status_code})
+                if resp.status_code < 400 and resp.content:
+                    text = resp.text
+                    rec['policy_logs'][f'{pv_id[:8]}/{agent_idx}'] = {'bytes': len(text), 'head': scrub(text[:1200]), 'tail': scrub(text[-2500:])}
+        out.append(rec)
+        save()
+    state['episode_requests'] = out
+    state['phase'] = 'diagnose'
+    save()
+    print(json.dumps({'round': state['round'], 'episode_requests': out, 'commissioner_logs': state['commissioner_logs'], 'membership_events': state['membership_events']}, default=str), flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['status', 'submit', 'rounds'])
+    parser.add_argument('action', choices=['status', 'submit', 'rounds', 'diagnose'])
     args = parser.parse_args()
     with CoworldApiClient.from_login(server_url=SERVER) as api:
         if args.action == 'rounds':
             rounds_report(api); return
+        if args.action == 'diagnose':
+            diagnose(api); return
         players = [p for p in (request(api, 'GET', '/players') or []) if not p.get('disabled_at')]
         state['players'] = [player_record(p) for p in players]
         versions = {}

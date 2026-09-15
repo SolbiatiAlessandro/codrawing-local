@@ -5,8 +5,12 @@ on:
       action:
         description: Inspect/create/configure the BOTPAINT league, or list/submit its policies
         type: choice
-        options: [inspect, create, configure, submissions-status, submit, rounds]
+        options: [inspect, create, configure, submissions-status, submit, rounds, diagnose]
         default: inspect
+      round_id:
+        description: Round id for diagnose
+        required: false
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -30,11 +34,13 @@ jobs:
       - name: Manage BOTPAINT league
         env:
           LEAGUE_ACTION: ${{ inputs.action }}
+          ROUND_ID: ${{ inputs.round_id }}
         run: |
           case "$LEAGUE_ACTION" in
             submissions-status) script=scripts/submit_botpaint_policies.py; arg=status ;;
             submit) script=scripts/submit_botpaint_policies.py; arg=submit ;;
             rounds) script=scripts/submit_botpaint_policies.py; arg=rounds ;;
+            diagnose) script=scripts/submit_botpaint_policies.py; arg=diagnose ;;
             *) script=scripts/manage_botpaint_league.py; arg="$LEAGUE_ACTION" ;;
           esac
           uv run --no-project --python 3.12 --with "git+https://github.com/Metta-AI/coworld.git@4c26e519040ffe7182104f3417035020acea607b" python "$script" "$arg"
