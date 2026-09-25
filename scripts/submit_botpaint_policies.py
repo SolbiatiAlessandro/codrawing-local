@@ -89,6 +89,43 @@ def rounds_report(api):
     print(json.dumps({'memberships': state['memberships'], 'ladder': state.get('division_ladder'), 'rounds': out}, default=str), flush=True)
 
 
+def scheduling_health(api, *, trigger=False):
+    """Inspect eligibility; optionally request one existing platform-ladder cycle."""
+    league = request(api, 'GET', f'/v2/leagues/{LEAGUE}') or {}
+    state['league'] = _pick(league, ('id', 'name', 'commissioner_key', 'rounds_paused_at', 'disabled_at', 'submissions_locked_at'))
+    settings = request(api, 'GET', f'/v2/leagues/{LEAGUE}/settings') or {}
+    state['settings_keys'] = list(settings)
+    state['settings'] = _pick(settings.get('settings') or {}, ('round_interval_minutes', 'ladder'))
+    state['defaults'] = _pick(settings.get('defaults') or {}, ('round_interval_minutes', 'ladder'))
+    state['effective_ladder_config'] = settings.get('effective_ladder_config')
+    state['warnings'] = settings.get('warnings')
+    ladder = request(api, 'GET', f'/v2/leagues/{LEAGUE}/division-ladder')
+    state['division_ladder'] = ladder
+    page = request(api, 'GET', '/v2/league-policy-memberships', params={'league_id': LEAGUE, 'active_only': 'true', 'limit': 50})
+    entries = page.get('entries', []) if isinstance(page, dict) else (page or [])
+    state['memberships'] = [{
+        **_pick(m, ('id', 'status', 'substatus', 'is_champion', 'start_time', 'end_time', 'created_at')),
+        'player': _pick(m.get('player') or {}, ('id', 'name')),
+        'division': _pick(m.get('division') or {}, ('id', 'name', 'type', 'archived_at')),
+        'policy_version': _pick(m.get('policy_version') or {}, ('id', 'policy', 'version', 'label')),
+    } for m in entries]
+    state['phase'] = 'scheduling_health'
+    save()
+    if trigger:
+        champions = [m for m in entries if m.get('is_champion') and m.get('status') == 'competing' and not m.get('end_time')]
+        if league.get('rounds_paused_at') or league.get('disabled_at'):
+            raise SystemExit('League paused or disabled; preserve state for review')
+        if not (settings.get('effective_ladder_config') or {}).get('enabled'):
+            raise SystemExit('Ladder is not enabled; no trigger sent')
+        if len({(m.get('player') or {}).get('id') for m in champions}) < 2:
+            raise SystemExit('Fewer than two distinct competing champions; no trigger sent')
+        result = request(api, 'POST', f'/v2/leagues/{LEAGUE}/trigger-round', {})
+        state['trigger_response'] = _pick(result, ('status', 'message', 'detail', 'workflow_id', 'round_id'))
+        state['phase'] = 'trigger_accepted' if result is not None else 'trigger_rejected'
+        save()
+    print(json.dumps(state, default=str), flush=True)
+
+
 import os
 import re
 
@@ -147,9 +184,11 @@ def diagnose(api):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['status', 'submit', 'rounds', 'diagnose'])
+    parser.add_argument('action', choices=['status', 'submit', 'rounds', 'diagnose', 'health', 'trigger'])
     args = parser.parse_args()
     with CoworldApiClient.from_login(server_url=SERVER) as api:
+        if args.action in ('health', 'trigger'):
+            scheduling_health(api, trigger=args.action == 'trigger'); return
         if args.action == 'rounds':
             rounds_report(api); return
         if args.action == 'diagnose':
