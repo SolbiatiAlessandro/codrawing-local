@@ -99,6 +99,11 @@ def scheduling_health(api, *, trigger=False):
     state['defaults'] = _pick(settings.get('defaults') or {}, ('round_interval_minutes', 'ladder'))
     state['effective_ladder_config'] = settings.get('effective_ladder_config')
     state['warnings'] = settings.get('warnings')
+    owner = request(api, 'GET', f'/v2/leagues/{LEAGUE}/owner-status') or {}
+    state['owner_status_keys'] = list(owner)
+    state['owner_status'] = _pick(owner, ('credits', 'budget', 'status', 'scheduling', 'funding', 'warnings'))
+    budget = request(api, 'GET', '/v2/coworlds/botpaint/budget') or {}
+    state['coworld_budget'] = budget
     ladder = request(api, 'GET', f'/v2/leagues/{LEAGUE}/division-ladder')
     state['division_ladder'] = ladder
     page = request(api, 'GET', '/v2/league-policy-memberships', params={'league_id': LEAGUE, 'active_only': 'true', 'limit': 50})
@@ -120,7 +125,8 @@ def scheduling_health(api, *, trigger=False):
         if len({(m.get('player') or {}).get('id') for m in champions}) < 2:
             raise SystemExit('Fewer than two distinct competing champions; no trigger sent')
         result = request(api, 'POST', f'/v2/leagues/{LEAGUE}/trigger-round', {})
-        state['trigger_response'] = _pick(result, ('status', 'message', 'detail', 'workflow_id', 'round_id'))
+        state['trigger_response_keys'] = list(result) if isinstance(result, dict) else []
+        state['trigger_response'] = _pick(result, ('status', 'message', 'detail', 'workflow_id', 'round_id', 'started', 'already_running', 'reason'))
         state['phase'] = 'trigger_accepted' if result is not None else 'trigger_rejected'
         save()
     print(json.dumps(state, default=str), flush=True)
